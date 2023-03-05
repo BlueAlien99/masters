@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -19,12 +20,10 @@ class Sentence:
 
     @staticmethod
     def from_chunks(chunks_str: str):
-        chunks = [chunk.strip()
-                  for chunk in chunks_str.strip()[1:-1].split('] [')]
-        sentence = ' '.join(chunks)
-        tokens = sentence.split()
-        chunks_id = [[tokens.index(token)
-                      for token in chunk.split()] for chunk in chunks]
+        tokens = [token for token in re.split('[ \\[\\]]+', chunks_str) if token]
+        sentence = ' '.join(tokens)
+        chunks = [chunk.strip() for chunk in re.findall('(?<=\\[)[^\\[\\]]+', chunks_str)]
+        chunks_id = [[tokens.index(token) for token in chunk.split()] for chunk in chunks]
         return Sentence(sentence, tokens, chunks_id)
 
     def to_wa_token_mappings(self):

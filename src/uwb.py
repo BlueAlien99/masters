@@ -8,7 +8,8 @@ def process_sentence(pair):
 
 
 def main():
-    data = get_data_gs('test', Datasets.H)
+    data = [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I), *get_data_gs('test', Datasets.AS),
+            *get_data_gs('train', Datasets.H), *get_data_gs('train', Datasets.I), *get_data_gs('train', Datasets.AS)]
 
     for pair in data:
         ali = min(len(pair.sent_1.chunks), len(pair.sent_2.chunks))

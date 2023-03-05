@@ -44,5 +44,5 @@ def export_and_eval(data: list[SentencePair], label=''):
     export_paths = export_data_to_wa_files(data)
     for path in export_paths:
         filename = path.split('/')[-1]
-        input_path = f'{paths.data_path}/{filename.split("-")[-1].replace("output", "input")}'
+        input_path = f'{paths.data_path}/{filename.split("-", 1)[-1].replace("output", "input")}'
         perl_eval(input_path, path, label)

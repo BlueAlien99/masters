@@ -200,7 +200,7 @@
 [ because ] [ bulbs b and c ] [ are ] [ in a closed path ] [ with the battery. ] 
 [ the gap ] [ in terminal 2 ] [ is ] [ postive ] 
 [ Because ] [ there ] [ is ] [ a bulb ] [ in one ] [ of the paths. ] 
-[ the battery ] [ is ] [ in [ a closed path ] [ but ] [ connects ] [ with nothing else ] 
+[ the battery ] [ is ] [ in a closed path ] [ but ] [ connects ] [ with nothing else ]
 [ Because ] [ one ] [ of the bulb terminals ] [ is ] [ bad, ] [ and ] [ the other ones ] [ are ] [ good. ] 
 [ bulbs a and c ] [ are ] [ on a closed path ] [ with the battery ] 
 [ The light bulb ] [ is not ] [ in a closed path ] 
