@@ -1,17 +1,14 @@
-import os
-
+from . import paths
 from .data_types import Datasets, DataType
 from .sentence import Sentence
 from .sentence_pair import SentencePair
-
-dir_path = os.path.dirname(os.path.realpath(__file__))
 
 
 def _get_data(datatype: DataType, dataset: Datasets, chunked: bool):
     filenames = [
         f'STSint.{"test" if datatype == "test" else ""}input.{dataset}.sent{i}{".chunk" if chunked else ""}.txt' for i
         in [1, 2]]
-    filepaths = [f'{dir_path}/../../data/{filename}' for filename in filenames]
+    filepaths = [f'{paths.data_path}/{filename}' for filename in filenames]
 
     files_contents = []
     for filepath in filepaths:

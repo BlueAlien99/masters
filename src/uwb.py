@@ -1,4 +1,4 @@
-from helpers.data_exporter import export_data_to_wa_files
+from helpers.data_exporter import export_and_eval
 from helpers.data_reader import get_data_gs
 from helpers.data_types import Datasets
 
@@ -17,7 +17,7 @@ def main():
         pair.alignments = [*[([i], [i]) for i in range(ali)],
                            *[(([i], []) if first_longer else ([], [i])) for i in range(ali, no_ali)]]
 
-    export_data_to_wa_files(data)
+    export_and_eval(data)
 
 
 if __name__ == '__main__':
