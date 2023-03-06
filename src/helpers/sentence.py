@@ -8,11 +8,13 @@ class Sentence:
     string: str
     tokens: list[str]
     chunks: Optional[list[list[int]]]
+    chunk_data: list[dict[str, any]]
 
     def __init__(self, sentence: str, tokens: list[str], chunks: Optional[list[list[int]]] = None):
         self.string = sentence
         self.tokens = tokens
         self.chunks = chunks
+        self.chunk_data = [{'words': self.tokens_to_string(chunk).split(' ')} for chunk in chunks]
 
     @staticmethod
     def from_sentence(sentence: str):
