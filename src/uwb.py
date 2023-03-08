@@ -74,13 +74,15 @@ def main():
                 # chunk['vec'] = vec
                 chunk['vec'] = np.mean(vec, axis=0) if vec else None
 
-        sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))] for _ in range(len(pair.sent_1.chunks))]
+        sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
+                for _ in range(len(pair.sent_1.chunks))]
 
         for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
             for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
                 sim = cos_sim(chunk_1["vec"], chunk_2["vec"])
                 sims[i][j] = (i, j, sim)
-                print(f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
+                print(
+                    f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
 
         sent_1_chids = set([i for i in range(len(pair.sent_1.chunks))])
         sent_2_chids = set([i for i in range(len(pair.sent_2.chunks))])
@@ -92,7 +94,6 @@ def main():
         # print(sims[0][1][2])
         # print(len(sims[0][1]))
 
-
         while len(sims) and len(sims[0]):
             max_val = (-1, -1, -1)
             max_ij = (-1, -1)
@@ -101,19 +102,21 @@ def main():
                     if sims[i][j][2] > max_val[2]:
                         max_val = sims[i][j]
                         max_ij = (i, j)
-            print(max_val)
-            print(max_val[0])
-            print(max_val[1])
-            print(f'{max_val} => {" ".join(pair.sent_1.chunk_data[max_val[0]]["words"])} <=> {" ".join(pair.sent_2.chunk_data[max_val[1]]["words"])}')
+            print(
+                f'{max_val} => {" ".join(pair.sent_1.chunk_data[max_val[0]]["words"])} <=> {" ".join(pair.sent_2.chunk_data[max_val[1]]["words"])}')
             sent_1_chids.remove(max_val[0])
             sent_2_chids.remove(max_val[1])
             pair.alignments.append(([max_val[0]], [max_val[1]]))
             sims = delete_axis(sims, max_ij[0], 0)
             sims = delete_axis(sims, max_ij[1], 1)
 
-        print(pair.alignments)
+        # fun fact vvv doesn't matter
+        for chid in sent_1_chids:
+            pair.alignments.append(([chid], []))
+        for chid in sent_2_chids:
+            pair.alignments.append(([], [chid]))
 
-        #TODO: noali
+        print(pair.alignments)
 
     export_and_eval(data)
 
