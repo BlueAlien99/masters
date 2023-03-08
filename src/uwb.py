@@ -3,9 +3,11 @@ from helpers.data_reader import get_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair
 from operator import add
+import re
 from gensim.models import Word2Vec
 import gensim.downloader
 import numpy as np
+from typing import Optional
 
 
 def cos_sim(a: list[float] | None, b: list[float] | None):
@@ -27,8 +29,22 @@ def delete_axis(array, index: int, axis: int):
     return array
 
 
-def process_sentence(pair):
-    pass
+def get_word_vectors(vectors: dict, word: str, unrecognized_words: Optional[set[str]]) -> list[list[float]]:
+    if word in vectors:
+        return [vectors[word]]
+
+    word_parts = [word_part for word_part in re.split(
+        '[^A-Za-z]', word) if word_part]
+    print(f'{word} -> {word_parts}')
+
+    vecs = []
+    for word_part in word_parts:
+        if word_part in vectors:
+            vecs.append(vectors[word_part])
+        else:
+            unrecognized_words.add(word_part)
+    return vecs
+
 
 
 def main():
@@ -56,23 +72,24 @@ def main():
     vectors = gensim.downloader.load('word2vec-google-news-300')
     # print(vectors['car'])
 
+    # TODO: unrecognized_words UK to US
     # TODO: after align, try to add one more chunk
     # TODO: THR
-    THR = 0.5
+    THR = 0.3
+
+    unrecognized_words = set()
 
     for pair in data:
-        print(f'>>> PAIR #{pair.id[2]}')
+        print(f'\n>>> PAIR #{pair.id[2]}')
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
-                # vec = None
                 vec = []
                 for word in chunk['words']:
-                    if word in vectors:
-                        # TODO: add vs avg
-                        # vec = vectors[word] if vec is None else list( map(add, vec, vectors[word]) )
-                        vec.append(vectors[word])
-                # chunk['vec'] = vec
+                    vec.extend(get_word_vectors(
+                        vectors, word, unrecognized_words))
+                # doesn't matter
                 chunk['vec'] = np.mean(vec, axis=0) if vec else None
+                # chunk['vec'] = np.sum(vec, axis=0) if vec else None
 
         sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
                 for _ in range(len(pair.sent_1.chunks))]
@@ -102,6 +119,9 @@ def main():
                     if sims[i][j][2] > max_val[2]:
                         max_val = sims[i][j]
                         max_ij = (i, j)
+            if max_val[2] < THR:
+                break
+
             print(
                 f'{max_val} => {" ".join(pair.sent_1.chunk_data[max_val[0]]["words"])} <=> {" ".join(pair.sent_2.chunk_data[max_val[1]]["words"])}')
             sent_1_chids.remove(max_val[0])
@@ -119,6 +139,10 @@ def main():
         print(pair.alignments)
 
     export_and_eval(data)
+
+    print(unrecognized_words)
+    print(f'Unrecognized words: {len(unrecognized_words)}')
+
 
 
 if __name__ == '__main__':
