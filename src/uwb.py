@@ -35,7 +35,7 @@ def get_word_vector(vectors: dict, word: str) -> list[float] | None:
     return None
 
 
-def get_word_vectors(vectors: dict, word: str, unrecognized_words: Optional[set[str]]) -> list[list[float]]:
+def get_word_vectors(vectors: dict, word: str, unrecognized_words: set[str] = None) -> list[list[float]]:
     vector = get_word_vector(vectors, word)
     if vector is not None:
         return [vector]
@@ -45,24 +45,25 @@ def get_word_vectors(vectors: dict, word: str, unrecognized_words: Optional[set[
     corrected_word = autocorrect[word] if word in autocorrect else word
     # corrected_word = word
     word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
-    print(f'{word} -> {word_parts}')
+    # print(f'{word} -> {word_parts}')
 
     vecs = []
     for word_part in word_parts:
         vector = get_word_vector(vectors, word_part)
         if vector is not None:
             vecs.append(vector)
-        elif word_part not in ignore_list:
+        elif word_part not in ignore_list and unrecognized_words is not None:
             unrecognized_words.add(word_part)
     return vecs
 
 
 def main():
-    data: list[SentencePair] = [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I),
-                                *get_data_gs('test', Datasets.AS),
-                                *get_data_gs('train', Datasets.H), *get_data_gs('train', Datasets.I),
-                                *get_data_gs('train', Datasets.AS)]
-    #
+    train_data: list[SentencePair] = [*get_data_gs('train', Datasets.H), *get_data_gs('train', Datasets.I), *get_data_gs('train', Datasets.AS)]
+    test_data: list[SentencePair] = [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I), *get_data_gs('test', Datasets.AS)]
+    all_data = [*test_data, *train_data]
+
+    data = test_data
+
     # data = data[:4]
 
     # data: list[SentencePair] = [*get_data_gs('test', Datasets.H)]
@@ -85,31 +86,60 @@ def main():
 
     # TODO: after align, try to add one more chunk
     # THR
-    THR = 0.35
+    # Value for vec comp
+    # THR = 0.35
+    # Value for lex sem vecs
+    THR = 0.45
 
     unrecognized_words = set()
 
     for pair in data:
         print(f'\n>>> PAIR #{pair.id[2]+1}')
-        for sent in [pair.sent_1, pair.sent_2]:
-            for chunk in sent.chunk_data:
-                vec = []
-                for word in chunk['words']:
-                    vec.extend(get_word_vectors(
-                        vectors, word, unrecognized_words))
-                # doesn't matter
-                chunk['vec'] = np.mean(vec, axis=0) if vec else None
-                # chunk['vec'] = np.sum(vec, axis=0) if vec else None
 
+        # vvv vector composition
+        # for sent in [pair.sent_1, pair.sent_2]:
+        #     for chunk in sent.chunk_data:
+        #         vec = []
+        #         for word in chunk['words']:
+        #             vec.extend(get_word_vectors(
+        #                 vectors, word, unrecognized_words))
+        #         # doesn't matter
+        #         chunk['vec'] = np.mean(vec, axis=0) if vec else None
+        #         # chunk['vec'] = np.sum(vec, axis=0) if vec else None
+        #
+        # sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
+        #         for _ in range(len(pair.sent_1.chunks))]
+        #
+        # for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
+        #     for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
+        #         sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
+        #         sims[i][j] = (i, j, sim)
+        #         print(
+        #             f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
+        # ^^^ vector composition
+
+        # vvv lexical semantic vectors
         sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
                 for _ in range(len(pair.sent_1.chunks))]
 
         for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
             for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
-                sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
+                words = {*chunk_1["words"], *chunk_2["words"]}
+                word_vecs = [vec for word in words for vec in get_word_vectors(vectors, word)]
+                chunk_1_word_vecs = [vec for word in chunk_1["words"] for vec in get_word_vectors(vectors, word)]
+                chunk_2_word_vecs = [vec for word in chunk_2["words"] for vec in get_word_vectors(vectors, word)]
+
+                chunk_1_vec = []
+                chunk_2_vec = []
+                for word_vec in word_vecs:
+                    chunk_1_vec.append(max([cosine_similarity(word_vec, chunk_1_word_vec) for chunk_1_word_vec in chunk_1_word_vecs] or [0]))
+                    chunk_2_vec.append(max([cosine_similarity(word_vec, chunk_2_word_vec) for chunk_2_word_vec in chunk_2_word_vecs] or [0]))
+
+                sim = cosine_similarity(chunk_1_vec, chunk_2_vec)
                 sims[i][j] = (i, j, sim)
                 print(
                     f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
+        # ^^^ lexical semantic vectors
 
         sent_1_chids = set([i for i in range(len(pair.sent_1.chunks))])
         sent_2_chids = set([i for i in range(len(pair.sent_2.chunks))])

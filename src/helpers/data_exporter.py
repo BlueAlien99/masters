@@ -1,4 +1,6 @@
+import re
 from datetime import datetime
+from statistics import fmean
 from subprocess import check_output
 
 from . import paths
@@ -34,15 +36,23 @@ def export_data_to_wa_files(data: list[SentencePair]):
 
 def perl_eval(input_path: str, export_path: str, label=''):
     cmd = f'perl {paths.eval_script} {input_path} {export_path}'
+    output = check_output(cmd.split()).decode()
+    scores = [float(re.search('\\d\\.\\d+', line).group()) for line in output.splitlines()]
 
     print(f'\n{label}')
     print(export_path.split('/')[-1])
-    print(check_output(cmd.split()).decode())
+    print(output)
+
+    return scores
 
 
 def export_and_eval(data: list[SentencePair], label=''):
     export_paths = export_data_to_wa_files(data)
+    ali_scores = []
     for path in export_paths:
         filename = path.split('/')[-1]
         input_path = f'{paths.data_path}/{filename.split("-", 1)[-1].replace("output", "input")}'
-        perl_eval(input_path, path, label)
+        scores = perl_eval(input_path, path, label)
+        ali_scores.append(scores[0])
+    avg_ali_score = round(fmean(ali_scores), 4)
+    print(f'\n F1 Ali Avg {avg_ali_score}\n\n')
