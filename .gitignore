@@ -1,6 +1,10 @@
 .idea
 __pycache__
 
+temp
+
 /output/*
+
+~$*.xlsx
 
 !.gitkeep
