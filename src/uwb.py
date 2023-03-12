@@ -1,17 +1,18 @@
 from helpers.data_exporter import export_and_eval
 from helpers.data_reader import get_data_gs
 from helpers.data_types import Datasets
-from helpers.sentence_pair import SentencePair
+from helpers.sentence_pair import SentencePair, Alignment
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
-from utils.math import cosine_similarity
+from utils.math import cosine_similarity, delete_axis
 from operator import add
 import re
 from gensim.models import Word2Vec
 import gensim.downloader
 import numpy as np
-from typing import Optional
+from typing import Tuple
 from nltk.stem import WordNetLemmatizer
 import nltk
+from gensim.models import KeyedVectors
 
 # nltk.download('wordnet')
 
@@ -19,17 +20,7 @@ lemmatizer = WordNetLemmatizer()
 lemmastory = set()
 
 
-def delete_axis(array, index: int, axis: int):
-    if axis == 0:
-        array.pop(index)
-    if axis == 1:
-        for inner in array:
-            inner.pop(index)
-
-    return array
-
-
-def get_word_vector(vectors: dict, word: str) -> list[float] | None:
+def get_word_vector(vectors: object, word: str) -> list[float] | None:
     def _try_with(_word: str):
         if _word is None:
             return None
@@ -43,7 +34,7 @@ def get_word_vector(vectors: dict, word: str) -> list[float] | None:
     return next((_try_with(cand) for cand in candidates if _try_with(cand) is not None), None)
 
 
-def get_word_vectors(vectors: dict, word: str, unrecognized_words: set[str] = None) -> list[list[float]]:
+def get_word_vectors(vectors: object, word: str, unrecognized_words: set[str] = None) -> list[list[float]]:
     vector = get_word_vector(vectors, word)
     if vector is not None:
         return [vector]
@@ -63,6 +54,17 @@ def get_word_vectors(vectors: dict, word: str, unrecognized_words: set[str] = No
         elif word_part not in ignore_list and unrecognized_words is not None:
             unrecognized_words.add(word_part)
     return vecs
+
+
+def get_chunk_vector(vectors: object, words: list[str], unrecognized_words: set[str] = None) -> list[float]:
+    vec = [vec for word in words for vec in get_word_vectors(vectors, word, unrecognized_words)]
+    # doesn't matter
+    return np.mean(vec, axis=0) if vec else None
+    # return np.sum(vec, axis=0) if vec else None
+
+
+def get_printable_alignment(pair: SentencePair, alignment: Alignment, max_val: Tuple):
+    return f'{max_val} => {" ".join([word for chid in alignment[0] for word in pair.sent_1.chunk_data[chid]["words"]])} <=> {" ".join([word for chid in alignment[1] for word in pair.sent_2.chunk_data[chid]["words"]])}'
 
 
 def main():
@@ -91,7 +93,11 @@ def main():
     # print(data[0].sent_1)
 
     # print(list(gensim.downloader.info()['models'].keys()))
-    vectors = gensim.downloader.load('word2vec-google-news-300')
+    kv_data = 'word2vec-google-news-300'
+    kv_local = f'gensim-data/{kv_data}'
+    # vectors = gensim.downloader.load(kv_data)
+    # vectors.save(kv_local)
+    vectors = KeyedVectors.load(kv_local, mmap='r')
     # print(vectors['car'])
 
     # TODO: after align, try to add one more chunk
@@ -104,18 +110,19 @@ def main():
     unrecognized_words = set()
 
     for pair in data:
-        print(f'\n>>> PAIR #{pair.id[2] + 1}')
+        print_buf = []
+
+        print_buf.append(f'\n\n>>> PAIR #{pair.id[2] + 1}')
+        print_buf.append(' <> '.join([' '.join(cd['words']) for cd in pair.sent_1.chunk_data]))
+        print_buf.append(' <> '.join([' '.join(cd['words']) for cd in pair.sent_2.chunk_data]))
+        print_buf.append('')
+
+        sim_strings = []
 
         # vvv vector composition
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
-                vec = []
-                for word in chunk['words']:
-                    vec.extend(get_word_vectors(
-                        vectors, word, unrecognized_words))
-                # doesn't matter
-                chunk['vec'] = np.mean(vec, axis=0) if vec else None
-                # chunk['vec'] = np.sum(vec, axis=0) if vec else None
+                chunk['vec'] = get_chunk_vector(vectors, chunk['words'], unrecognized_words)
 
         sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
                 for _ in range(len(pair.sent_1.chunks))]
@@ -124,7 +131,7 @@ def main():
             for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
                 sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
                 sims[i][j] = (i, j, sim)
-                print(
+                sim_strings.append(
                     f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
         # ^^^ vector composition
 
@@ -149,38 +156,90 @@ def main():
         #
         #         sim = cosine_similarity(chunk_1_vec, chunk_2_vec)
         #         sims[i][j] = (i, j, sim)
-        #         print(
+        #         sim_strings.append(
         #             f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
         # ^^^ lexical semantic vectors
+
+        sim_strings.sort(reverse=True)
+        print_buf.append('\n'.join([*sim_strings, '']))
 
         sent_1_chids = set([i for i in range(len(pair.sent_1.chunks))])
         sent_2_chids = set([i for i in range(len(pair.sent_2.chunks))])
 
-        # print(sims)
+        # print_buf.append(sims)
 
-        # print(sims[0][1])
-        # print(type(sims[0][1]))
-        # print(sims[0][1][2])
-        # print(len(sims[0][1]))
+        # print_buf.append(sims[0][1])
+        # print_buf.append(type(sims[0][1]))
+        # print_buf.append(sims[0][1][2])
+        # print_buf.append(len(sims[0][1]))
 
-        while len(sims) and len(sims[0]):
+        # while len(sims) and len(sims[0]):
+        #     max_val = (-1, -1, -1)
+        #     max_ij = (-1, -1)
+        #     for i in range(len(sims)):
+        #         for j in range(len(sims[0])):
+        #             if sims[i][j][2] > max_val[2]:
+        #                 max_val = sims[i][j]
+        #                 max_ij = (i, j)
+        #     if max_val[2] < THR:
+        #         break
+        #
+        #     sent_1_chids.remove(max_val[0])
+        #     sent_2_chids.remove(max_val[1])
+        #     alignment = ([max_val[0]], [max_val[1]])
+        #     pair.alignments.append(alignment)
+        #     print_buf.append(get_printable_alignment(pair, alignment, max_val))
+        #     sims = delete_axis(sims, max_ij[0], 0)
+        #     sims = delete_axis(sims, max_ij[1], 1)
+        #
+        # should_print = True
+
+        should_print = False
+
+        while True:
             max_val = (-1, -1, -1)
-            max_ij = (-1, -1)
             for i in range(len(sims)):
                 for j in range(len(sims[0])):
                     if sims[i][j][2] > max_val[2]:
                         max_val = sims[i][j]
-                        max_ij = (i, j)
             if max_val[2] < THR:
                 break
 
-            print(
-                f'{max_val} => {" ".join(pair.sent_1.chunk_data[max_val[0]]["words"])} <=> {" ".join(pair.sent_2.chunk_data[max_val[1]]["words"])}')
-            sent_1_chids.remove(max_val[0])
-            sent_2_chids.remove(max_val[1])
-            pair.alignments.append(([max_val[0]], [max_val[1]]))
-            sims = delete_axis(sims, max_ij[0], 0)
-            sims = delete_axis(sims, max_ij[1], 1)
+            chids_1_used = []
+            chids_2_used = []
+            for ali in pair.alignments:
+                if max_val[0] in ali[0] or max_val[1] in ali[1]:
+                    chids_1_used.extend([chid for chid in ali[0] if chid != max_val[0]])
+                    chids_2_used.extend([chid for chid in ali[1] if chid != max_val[1]])
+
+            sims[max_val[0]][max_val[1]] = (max_val[0], max_val[1], -1)
+            sent_1_chids.discard(max_val[0])
+            sent_2_chids.discard(max_val[1])
+
+            if not len(chids_1_used) and not len(chids_2_used):
+                alignment = ([max_val[0]], [max_val[1]])
+                pair.alignments.append(alignment)
+                print_buf.append(get_printable_alignment(pair, alignment, max_val))
+            elif len(chids_1_used) and len(chids_2_used):
+                continue
+            else:
+                idx = 0 if len(chids_1_used) else 1
+                alignment = next(ali for ali in pair.alignments if (chids_1_used[0] in ali[0])) if idx == 0 else next(ali for ali in pair.alignments if (chids_2_used[0] in ali[1]))
+
+                temp_ali = [sub.copy() for sub in alignment]
+                temp_ali[idx].append(max_val[idx])
+
+                prev_max_val = (-1, -1, cosine_similarity(get_chunk_vector(vectors, [word for chid in alignment[0] for word in pair.sent_1.chunk_data[chid]["words"]]), get_chunk_vector(vectors, [word for chid in alignment[1] for word in pair.sent_2.chunk_data[chid]["words"]])))
+                # TODO: to method
+                new_max_val = (max_val[0], max_val[1], cosine_similarity(get_chunk_vector(vectors, [word for chid in temp_ali[0] for word in pair.sent_1.chunk_data[chid]["words"]]), get_chunk_vector(vectors, [word for chid in temp_ali[1] for word in pair.sent_2.chunk_data[chid]["words"]])))
+
+                if new_max_val[2] <= prev_max_val[2]:
+                    continue
+
+                should_print = True
+                alignment[idx].append(max_val[idx])
+                alignment[idx].sort()
+                print_buf.append(get_printable_alignment(pair, alignment, new_max_val))
 
         # fun fact vvv doesn't matter
         for chid in sent_1_chids:
@@ -188,7 +247,10 @@ def main():
         for chid in sent_2_chids:
             pair.alignments.append(([], [chid]))
 
-        print(pair.alignments)
+        print_buf.append(pair.alignments)
+
+        if should_print:
+            print('\n'.join([(el if type(el) is str else el.__str__()) for el in print_buf]))
 
     export_and_eval(data)
 
