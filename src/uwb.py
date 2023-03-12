@@ -26,11 +26,17 @@ def get_word_vector(vectors: object, word: str) -> list[float] | None:
             return None
         # _base = lemmatizer.lemmatize(_word)
         _base = _word
+        # _base = f'/c/en/{_word}'
+        # _base = _word.lower()  # OH, NO!
         if _base != _word:
             lemmastory.add((_word, _base))
         return vectors[_base] if _base in vectors else None
 
-    candidates = [word, uk_to_us.get(word), autocorrect.get(word)]
+    # candidates = [word, uk_to_us.get(word), autocorrect.get(word)]
+    # candidates = [word, uk_to_us.get(word)]
+    # HOLY @#$%! <<<< +0.0055
+    # candidates = [word, word.lower(), word[:-1], word.lower()[:-1], uk_to_us.get(word)]
+    candidates = [word, word.lower(), word[:-1], word.lower()[:-1], uk_to_us.get(word), word[:-2], word.lower()[:-2]]
     return next((_try_with(cand) for cand in candidates if _try_with(cand) is not None), None)
 
 
@@ -93,6 +99,10 @@ def main():
     # print(data[0].sent_1)
 
     # print(list(gensim.downloader.info()['models'].keys()))
+    # ['fasttext-wiki-news-subwords-300', 'conceptnet-numberbatch-17-06-300', 'word2vec-ruscorpora-300',
+    #  'word2vec-google-news-300', 'glove-wiki-gigaword-50', 'glove-wiki-gigaword-100', 'glove-wiki-gigaword-200',
+    #  'glove-wiki-gigaword-300', 'glove-twitter-25', 'glove-twitter-50', 'glove-twitter-100', 'glove-twitter-200',
+    #  '__testing_word2vec-matrix-synopsis']
     kv_data = 'word2vec-google-news-300'
     kv_local = f'gensim-data/{kv_data}'
     # vectors = gensim.downloader.load(kv_data)
@@ -100,7 +110,6 @@ def main():
     vectors = KeyedVectors.load(kv_local, mmap='r')
     # print(vectors['car'])
 
-    # TODO: after align, try to add one more chunk
     # THR
     # Value for vec comp
     THR = 0.35
@@ -233,6 +242,7 @@ def main():
                 # TODO: to method
                 new_max_val = (max_val[0], max_val[1], cosine_similarity(get_chunk_vector(vectors, [word for chid in temp_ali[0] for word in pair.sent_1.chunk_data[chid]["words"]]), get_chunk_vector(vectors, [word for chid in temp_ali[1] for word in pair.sent_2.chunk_data[chid]["words"]])))
 
+                # OFFSET
                 if new_max_val[2] <= prev_max_val[2]:
                     continue
 
