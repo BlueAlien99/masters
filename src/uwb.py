@@ -12,7 +12,9 @@ import numpy as np
 from typing import Tuple
 from nltk.stem import WordNetLemmatizer
 import nltk
-from gensim.models import KeyedVectors
+from gensim.models import KeyedVectors, TfidfModel
+from gensim.corpora import Dictionary
+import gc
 
 # nltk.download('wordnet')
 
@@ -109,6 +111,36 @@ def main():
     # vectors.save(kv_local)
     vectors = KeyedVectors.load(kv_local, mmap='r')
     # print(vectors['car'])
+
+    # print(list(gensim.downloader.info()['corpora'].keys()))
+    # ['semeval-2016-2017-task3-subtaskBC', 'semeval-2016-2017-task3-subtaskA-unannotated', 'patent-2017',
+    #  'quora-duplicate-questions', 'wiki-english-20171001', 'text8', 'fake-news', '20-newsgroups',
+    #  '__testing_matrix-synopsis', '__testing_multipart-matrix-synopsis']
+    tfidf_data = 'wiki-english-20171001'
+    tfidf_data = 'text8'
+    tfidf_local = f'gensim-data/{tfidf_data}'
+    dict_local = f'gensim-data/dict'
+    dataset = gensim.downloader.load(tfidf_data)
+    print('downloader')
+    dct = Dictionary(dataset)  # fit dictionary
+    print('dict')
+    dct.save(dict_local)
+    print('save dict')
+    corpus = [dct.doc2bow(line) for line in dataset]  # convert corpus to BoW format
+    print('corpus')
+
+    # del dataset
+    # gc.collect()
+
+    model = TfidfModel(corpus)  # fit model
+    print('tfidf model')
+    model.save(tfidf_local)
+    # vector = model[corpus[0]]  # apply model to the first corpus document
+
+    # print(corpus[0])
+    # print(vector)
+
+    return
 
     # THR
     # Value for vec comp
