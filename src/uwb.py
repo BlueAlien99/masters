@@ -70,7 +70,7 @@ def get_chunk_vector(vectors: object, words: list[str], unrecognized_words: set[
 
 
 def get_printable_alignment(pair: SentencePair, alignment: Alignment, max_val: Tuple):
-    return f'{max_val} => {" ".join([word for chid in alignment[0] for word in pair.sent_1.chunk_data[chid]["words"]])} <=> {" ".join([word for chid in alignment[1] for word in pair.sent_2.chunk_data[chid]["words"]])}'
+    return f'{max_val} => {" ".join(pair.sent_1.chunks_to_words(alignment[0]))} <=> {" ".join(pair.sent_2.chunks_to_words(alignment[1]))}'
 
 
 def main():
@@ -233,14 +233,18 @@ def main():
                 continue
             else:
                 idx = 0 if len(chids_1_used) else 1
-                alignment = next(ali for ali in pair.alignments if (chids_1_used[0] in ali[0])) if idx == 0 else next(ali for ali in pair.alignments if (chids_2_used[0] in ali[1]))
+                alignment = next(ali for ali in pair.alignments if
+                                 (chids_1_used[0] in ali[0] if idx == 0 else chids_2_used[0] in ali[1]))
 
                 temp_ali = [sub.copy() for sub in alignment]
                 temp_ali[idx].append(max_val[idx])
 
-                prev_max_val = (-1, -1, cosine_similarity(get_chunk_vector(vectors, [word for chid in alignment[0] for word in pair.sent_1.chunk_data[chid]["words"]]), get_chunk_vector(vectors, [word for chid in alignment[1] for word in pair.sent_2.chunk_data[chid]["words"]])))
-                # TODO: to method
-                new_max_val = (max_val[0], max_val[1], cosine_similarity(get_chunk_vector(vectors, [word for chid in temp_ali[0] for word in pair.sent_1.chunk_data[chid]["words"]]), get_chunk_vector(vectors, [word for chid in temp_ali[1] for word in pair.sent_2.chunk_data[chid]["words"]])))
+                prev_max_val = (-1, -1,
+                                cosine_similarity(get_chunk_vector(vectors, pair.sent_1.chunks_to_words(alignment[0])),
+                                                  get_chunk_vector(vectors, pair.sent_2.chunks_to_words(alignment[1]))))
+                new_max_val = (max_val[0], max_val[1],
+                               cosine_similarity(get_chunk_vector(vectors, pair.sent_1.chunks_to_words(temp_ali[0])),
+                                                 get_chunk_vector(vectors, pair.sent_2.chunks_to_words(temp_ali[1]))))
 
                 # OFFSET
                 if new_max_val[2] <= prev_max_val[2]:

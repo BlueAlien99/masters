@@ -14,7 +14,7 @@ class Sentence:
         self.string = sentence
         self.tokens = tokens
         self.chunks = chunks
-        self.chunk_data = [{'words': self.tokens_to_string(chunk).split(' ')} for chunk in chunks]
+        self.chunk_data = [{'words': self.tokens_to_string(chunk_tokens).split(' ')} for chunk_tokens in chunks]
 
     @staticmethod
     def from_sentence(sentence: str):
@@ -33,6 +33,9 @@ class Sentence:
 
     def chunks_to_tokens(self, chunks: list[int]):
         return [token for chunk in chunks for token in self.chunks[chunk]]
+
+    def chunks_to_words(self, chunks: list[int]):
+        return [word for chunk in chunks for word in self.chunk_data[chunk]["words"]]
 
     def tokens_to_string(self, tokens: list[int]):
         return ' '.join([self.tokens[token] for token in tokens])
