@@ -19,10 +19,26 @@ lemmatizer = WordNetLemmatizer()
 lemmastory = set()
 
 kv = load_keyed_vectors()
-dct, tfidf = load_tfidf_model(1/6)
+# dct, tfidf = load_tfidf_model(1/6)
 
 
-def get_word_vector(vectors: object, word: str) -> list[float] | None:
+def get_word_vectors(vectors: dict, word: str) -> list[list[float]]:
+    if word not in vectors:
+        return []
+
+    kv_vec = vectors[word]
+    # idf_val = tfidf[dct.doc2bow([word])]
+
+    return [kv_vec]
+
+    # if len(idf_val) == 0:
+    #     # return []
+    #     return [kv_vec]
+
+    # return [[v*idf_val[0][1] for v in kv_vec]]
+
+
+def preprocess_word(vectors: dict, word: str):
     def _try_with(_word: str):
         if _word is None:
             return None
@@ -32,7 +48,13 @@ def get_word_vector(vectors: object, word: str) -> list[float] | None:
         # _base = _word.lower()  # OH, NO!
         if _base != _word:
             lemmastory.add((_word, _base))
-        return vectors[_base] if _base in vectors else None
+        return _base if _base in vectors else None
+
+    # if word in ignore_list:
+    #     return None
+
+    if re.fullmatch('[.-]?\\d[\\d.-]*', word) is not None:
+        return 'number'
 
     # candidates = [word, uk_to_us.get(word), autocorrect.get(word)]
     # candidates = [word, uk_to_us.get(word)]
@@ -42,32 +64,42 @@ def get_word_vector(vectors: object, word: str) -> list[float] | None:
     return next((_try_with(cand) for cand in candidates if _try_with(cand) is not None), None)
 
 
-def get_word_vectors(vectors: object, word: str, unrecognized_words: set[str] = None) -> list[list[float]]:
-    vector = get_word_vector(vectors, word)
-    if vector is not None:
-        return [vector]
+def preprocess_words(vectors: dict, words: list[str], unrecognized_words: set[str] = None):
+    new_words = []
+    for word in words:
+        preprocessed = preprocess_word(vectors, word)
+        if preprocessed is not None:
+            new_words.append(preprocessed)
+            continue
 
-    # Handle case like 'non-bathingsuit'
-    # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
-    corrected_word = autocorrect[word] if word in autocorrect else word
-    # corrected_word = word
-    word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
-    # print(f'{word} -> {word_parts}')
+        # Handle case like 'non-bathingsuit'
+        # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
+        corrected_word = autocorrect[word] if word in autocorrect else word
+        # corrected_word = word
+        word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
+        # print(f'{word} -> {word_parts}')
 
+        for word_part in word_parts:
+            preprocessed = preprocess_word(vectors, word_part)
+            if preprocessed is not None:
+                new_words.append(preprocessed)
+            elif word_part not in ignore_list and unrecognized_words is not None:
+                unrecognized_words.add(word_part)
+
+    return new_words
+
+
+def get_chunk_vector(vectors: dict, words: list[str]) -> list[float] | None:
     vecs = []
-    for word_part in word_parts:
-        vector = get_word_vector(vectors, word_part)
-        if vector is not None:
-            vecs.append(vector)
-        elif word_part not in ignore_list and unrecognized_words is not None:
-            unrecognized_words.add(word_part)
-    return vecs
+    for word in words:
+        vv = get_word_vectors(vectors, word)
+        if len(vv):
+            v = vv[0]
+            vecs.append(v)
 
-
-def get_chunk_vector(vectors: object, words: list[str], unrecognized_words: set[str] = None) -> list[float]:
-    vec = [vec for word in words for vec in get_word_vectors(vectors, word, unrecognized_words)]
+    # vec = [vec for word in words for vec in get_word_vector(vectors, word)]
     # doesn't matter
-    return np.mean(vec, axis=0) if vec else None
+    return np.mean(vecs, axis=0) if len(vecs) else None
     # return np.sum(vec, axis=0) if vec else None
 
 
@@ -85,6 +117,7 @@ def main():
     all_data = [*test_data, *train_data]
 
     data = test_data
+    # data = [*get_data_gs('test', Datasets.H)]
 
     # for pair in data:
     #     ali = min(len(pair.sent_1.chunks), len(pair.sent_2.chunks))
@@ -94,8 +127,6 @@ def main():
     #                        *[(([i], []) if first_longer else ([], [i])) for i in range(ali, no_ali)]]
     #
     # export_and_eval(data)
-
-    # print(model[dct.doc2bow(['I', 'love', 'cookies', 'Angular'])])
 
     # THR
     # Value for vec comp
@@ -113,12 +144,16 @@ def main():
         print_buf.append(' <> '.join([' '.join(cd['words']) for cd in pair.sent_2.chunk_data]))
         print_buf.append('')
 
+        for sent in [pair.sent_1, pair.sent_2]:
+            for chunk in sent.chunk_data:
+                chunk['words'] = preprocess_words(kv, chunk['words'])
+
         sim_strings = []
 
         # vvv vector composition
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
-                chunk['vec'] = get_chunk_vector(kv, chunk['words'], unrecognized_words)
+                chunk['vec'] = get_chunk_vector(kv, chunk['words'])
 
         sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
                 for _ in range(len(pair.sent_1.chunks))]

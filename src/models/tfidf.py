@@ -53,7 +53,7 @@ def load_tfidf_model(frac: float):
     print('Converting corpus to BoW format...')
     corpus = [dct.doc2bow(line) for line in data]
     print('Fitting Tfidf model...')
-    tfidf = TfidfModel(corpus)
+    tfidf = TfidfModel(corpus, smartirs='nfn')
     tfidf.save(tfidf_path)
 
     return dct, tfidf

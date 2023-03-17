@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -8,7 +8,7 @@ class Sentence:
     string: str
     tokens: list[str]
     chunks: Optional[list[list[int]]]
-    chunk_data: list[dict[str, any]]
+    chunk_data: list[dict[str, Any]]
 
     def __init__(self, sentence: str, tokens: list[str], chunks: Optional[list[list[int]]] = None):
         self.string = sentence

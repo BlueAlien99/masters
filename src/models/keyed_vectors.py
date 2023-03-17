@@ -14,7 +14,7 @@ def get_available_models():
     return list(gensim.downloader.info()['models'].keys())
 
 
-def load_keyed_vectors(model='word2vec-google-news-300'):
+def load_keyed_vectors(model='word2vec-google-news-300') -> dict:
     kv_path = f'{paths.gensim_data_path}/{model}_kv'
 
     if os.path.isfile(kv_path):
@@ -23,4 +23,4 @@ def load_keyed_vectors(model='word2vec-google-news-300'):
     kv = gensim.downloader.load(model)
     kv.save(kv_path)
 
-    return kv
+    return kv  # type: ignore
