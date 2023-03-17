@@ -130,7 +130,8 @@ def main():
 
     # THR
     # Value for vec comp
-    THR = 0.35
+    THR = 0.36
+    # THR = 0.20  # idf
     # Value for lex sem vecs
     # THR = 0.45
 

@@ -9,5 +9,7 @@
 - word[:-1] to -> t better
 - 
 - 
+- 0.8636 idf low thr vs 0.8783 no-idf high thr
+- 
 - 
 
