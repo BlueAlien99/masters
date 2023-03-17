@@ -7,19 +7,19 @@ from utils.math import cosine_similarity, delete_axis
 from operator import add
 import re
 from gensim.models import Word2Vec
-import gensim.downloader
 import numpy as np
 from typing import Tuple
 from nltk.stem import WordNetLemmatizer
 import nltk
-from gensim.models import KeyedVectors, TfidfModel
-from gensim.corpora import Dictionary
-import gc
-
-# nltk.download('wordnet')
+import random
+from models.keyed_vectors import load_keyed_vectors
+from models.tfidf import load_tfidf_model
 
 lemmatizer = WordNetLemmatizer()
 lemmastory = set()
+
+kv = load_keyed_vectors()
+dct, tfidf = load_tfidf_model(1/6)
 
 
 def get_word_vector(vectors: object, word: str) -> list[float] | None:
@@ -76,6 +76,8 @@ def get_printable_alignment(pair: SentencePair, alignment: Alignment, max_val: T
 
 
 def main():
+    random.seed(a=16032023)
+
     train_data: list[SentencePair] = [*get_data_gs('train', Datasets.H), *get_data_gs('train', Datasets.I),
                                       *get_data_gs('train', Datasets.AS)]
     test_data: list[SentencePair] = [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I),
@@ -83,11 +85,6 @@ def main():
     all_data = [*test_data, *train_data]
 
     data = test_data
-
-    # data = data[:4]
-
-    # data: list[SentencePair] = [*get_data_gs('test', Datasets.H)]
-    # data: list[SentencePair] = [*get_data_gs('train', Datasets.H)]
 
     # for pair in data:
     #     ali = min(len(pair.sent_1.chunks), len(pair.sent_2.chunks))
@@ -98,49 +95,7 @@ def main():
     #
     # export_and_eval(data)
 
-    # print(data[0].sent_1)
-
-    # print(list(gensim.downloader.info()['models'].keys()))
-    # ['fasttext-wiki-news-subwords-300', 'conceptnet-numberbatch-17-06-300', 'word2vec-ruscorpora-300',
-    #  'word2vec-google-news-300', 'glove-wiki-gigaword-50', 'glove-wiki-gigaword-100', 'glove-wiki-gigaword-200',
-    #  'glove-wiki-gigaword-300', 'glove-twitter-25', 'glove-twitter-50', 'glove-twitter-100', 'glove-twitter-200',
-    #  '__testing_word2vec-matrix-synopsis']
-    kv_data = 'word2vec-google-news-300'
-    kv_local = f'gensim-data/{kv_data}'
-    # vectors = gensim.downloader.load(kv_data)
-    # vectors.save(kv_local)
-    vectors = KeyedVectors.load(kv_local, mmap='r')
-    # print(vectors['car'])
-
-    # print(list(gensim.downloader.info()['corpora'].keys()))
-    # ['semeval-2016-2017-task3-subtaskBC', 'semeval-2016-2017-task3-subtaskA-unannotated', 'patent-2017',
-    #  'quora-duplicate-questions', 'wiki-english-20171001', 'text8', 'fake-news', '20-newsgroups',
-    #  '__testing_matrix-synopsis', '__testing_multipart-matrix-synopsis']
-    tfidf_data = 'wiki-english-20171001'
-    tfidf_data = 'text8'
-    tfidf_local = f'gensim-data/{tfidf_data}'
-    dict_local = f'gensim-data/dict'
-    dataset = gensim.downloader.load(tfidf_data)
-    print('downloader')
-    dct = Dictionary(dataset)  # fit dictionary
-    print('dict')
-    dct.save(dict_local)
-    print('save dict')
-    corpus = [dct.doc2bow(line) for line in dataset]  # convert corpus to BoW format
-    print('corpus')
-
-    # del dataset
-    # gc.collect()
-
-    model = TfidfModel(corpus)  # fit model
-    print('tfidf model')
-    model.save(tfidf_local)
-    # vector = model[corpus[0]]  # apply model to the first corpus document
-
-    # print(corpus[0])
-    # print(vector)
-
-    return
+    # print(model[dct.doc2bow(['I', 'love', 'cookies', 'Angular'])])
 
     # THR
     # Value for vec comp
@@ -163,7 +118,7 @@ def main():
         # vvv vector composition
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
-                chunk['vec'] = get_chunk_vector(vectors, chunk['words'], unrecognized_words)
+                chunk['vec'] = get_chunk_vector(kv, chunk['words'], unrecognized_words)
 
         sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
                 for _ in range(len(pair.sent_1.chunks))]
@@ -183,9 +138,9 @@ def main():
         # for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
         #     for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
         #         words = {*chunk_1["words"], *chunk_2["words"]}
-        #         word_vecs = [vec for word in words for vec in get_word_vectors(vectors, word)]
-        #         chunk_1_word_vecs = [vec for word in chunk_1["words"] for vec in get_word_vectors(vectors, word)]
-        #         chunk_2_word_vecs = [vec for word in chunk_2["words"] for vec in get_word_vectors(vectors, word)]
+        #         word_vecs = [vec for word in words for vec in get_word_vectors(kv, word)]
+        #         chunk_1_word_vecs = [vec for word in chunk_1["words"] for vec in get_word_vectors(kv, word)]
+        #         chunk_2_word_vecs = [vec for word in chunk_2["words"] for vec in get_word_vectors(kv, word)]
         #
         #         chunk_1_vec = []
         #         chunk_2_vec = []
@@ -272,11 +227,11 @@ def main():
                 temp_ali[idx].append(max_val[idx])
 
                 prev_max_val = (-1, -1,
-                                cosine_similarity(get_chunk_vector(vectors, pair.sent_1.chunks_to_words(alignment[0])),
-                                                  get_chunk_vector(vectors, pair.sent_2.chunks_to_words(alignment[1]))))
+                                cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(alignment[0])),
+                                                  get_chunk_vector(kv, pair.sent_2.chunks_to_words(alignment[1]))))
                 new_max_val = (max_val[0], max_val[1],
-                               cosine_similarity(get_chunk_vector(vectors, pair.sent_1.chunks_to_words(temp_ali[0])),
-                                                 get_chunk_vector(vectors, pair.sent_2.chunks_to_words(temp_ali[1]))))
+                               cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(temp_ali[0])),
+                                                 get_chunk_vector(kv, pair.sent_2.chunks_to_words(temp_ali[1]))))
 
                 # OFFSET
                 if new_max_val[2] <= prev_max_val[2]:
