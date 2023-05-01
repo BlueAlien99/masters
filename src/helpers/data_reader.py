@@ -33,3 +33,15 @@ def get_data_sys(datatype: DataType, dataset: Datasets):
     data = [SentencePair((datatype, dataset, i), *pair) for (i, pair) in enumerate(data)]
 
     return data
+
+
+def get_train_data_gs():
+    return [*get_data_gs('train', Datasets.H), *get_data_gs('train', Datasets.I), *get_data_gs('train', Datasets.AS)]
+
+
+def get_test_data_gs():
+    return [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I), *get_data_gs('test', Datasets.AS)]
+
+
+def get_all_data_gs():
+    return [*get_train_data_gs(), *get_test_data_gs()]

@@ -1,5 +1,6 @@
+import concurrent.futures
 from helpers.data_exporter import export_and_eval
-from helpers.data_reader import get_data_gs
+from helpers.data_reader import get_train_data_gs, get_test_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair, Alignment
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
@@ -14,6 +15,7 @@ import nltk
 import random
 from models.keyed_vectors import load_keyed_vectors
 from models.tfidf import load_tfidf_model
+import matplotlib.pyplot as plt
 
 lemmatizer = WordNetLemmatizer()
 lemmastory = set()
@@ -107,18 +109,7 @@ def get_printable_alignment(pair: SentencePair, alignment: Alignment, max_val: T
     return f'{max_val} => {" ".join(pair.sent_1.chunks_to_words(alignment[0]))} <=> {" ".join(pair.sent_2.chunks_to_words(alignment[1]))}'
 
 
-def main():
-    random.seed(a=16032023)
-
-    train_data: list[SentencePair] = [*get_data_gs('train', Datasets.H), *get_data_gs('train', Datasets.I),
-                                      *get_data_gs('train', Datasets.AS)]
-    test_data: list[SentencePair] = [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I),
-                                     *get_data_gs('test', Datasets.AS)]
-    all_data = [*test_data, *train_data]
-
-    data = test_data
-    # data = [*get_data_gs('test', Datasets.H)]
-
+def run(data: list[SentencePair], thr: float, *, log=False):
     # for pair in data:
     #     ali = min(len(pair.sent_1.chunks), len(pair.sent_2.chunks))
     #     no_ali = max(len(pair.sent_1.chunks), len(pair.sent_2.chunks))
@@ -127,13 +118,6 @@ def main():
     #                        *[(([i], []) if first_longer else ([], [i])) for i in range(ali, no_ali)]]
     #
     # export_and_eval(data)
-
-    # THR
-    # Value for vec comp
-    THR = 0.36
-    # THR = 0.20  # idf
-    # Value for lex sem vecs
-    # THR = 0.45
 
     unrecognized_words = set()
 
@@ -213,7 +197,7 @@ def main():
         #             if sims[i][j][2] > max_val[2]:
         #                 max_val = sims[i][j]
         #                 max_ij = (i, j)
-        #     if max_val[2] < THR:
+        #     if max_val[2] < thr:
         #         break
         #
         #     sent_1_chids.remove(max_val[0])
@@ -234,7 +218,7 @@ def main():
                 for j in range(len(sims[0])):
                     if sims[i][j][2] > max_val[2]:
                         max_val = sims[i][j]
-            if max_val[2] < THR:
+            if max_val[2] < thr:
                 break
 
             chids_1_used = []
@@ -286,15 +270,61 @@ def main():
 
         print_buf.append(pair.alignments)
 
-        if should_print:
+        if should_print and log:
             print('\n'.join([(el if type(el) is str else el.__str__()) for el in print_buf]))
 
-    export_and_eval(data)
+    result = export_and_eval(data)
 
     print(unrecognized_words)
     print(f'Unrecognized words: {len(unrecognized_words)}')
 
     # print(lemmastory)
+
+    return result
+
+
+def run_train(thr_step=0.01):
+    results = []
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=9) as executor:
+        runs = {}
+
+        thr = 0
+        while thr <= 1:
+            data = get_train_data_gs()
+            r = executor.submit(run, data, thr)
+            runs[r] = thr
+            thr += thr_step
+
+        for future in concurrent.futures.as_completed(runs):
+            thr = runs[future]
+            result = future.result()
+            results.append((thr, result))
+
+    results.sort(key=lambda r: r[0])
+    print(results)
+    plt.plot([d[0] for d in results], [d[1] for d in results])
+    plt.axis([0, 1, 0, 1])
+    plt.grid()
+    plt.show()
+    result = max(results, key=lambda r: r[1])
+    return result
+
+
+def run_test(thr: float):
+    # THR = 0.36  # vec comp
+    # THR = 0.20  # idf
+    # THR = 0.45  # lex sem vecs
+    data = get_test_data_gs()
+    result = run(data, thr, log=True)
+    print(f'TEST THR = {thr}')
+    return result
+
+
+def main():
+    random.seed(a=16032023)
+    result = run_train()
+    run_test(result[0])
 
 
 if __name__ == '__main__':

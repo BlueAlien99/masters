@@ -6,6 +6,7 @@ temp
 
 /gensim-data/*
 /output/*
+/plots/*
 
 ~$*.xlsx
 
