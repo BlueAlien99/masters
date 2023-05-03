@@ -3,6 +3,7 @@ from helpers.data_exporter import export_and_eval
 from helpers.data_reader import get_train_data_gs, get_test_data_gs, get_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair, Alignment
+from helpers.sentence import Sentence
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
 from utils.math import cosine_similarity, delete_axis
 from operator import add
@@ -17,6 +18,7 @@ from models.keyed_vectors import load_keyed_vectors
 from models.tfidf import load_tfidf_model
 import matplotlib.pyplot as plt
 from statistics import fmean
+from bert import chunk_cosine_sim
 
 DataGetter = Callable[[], list[SentencePair]]
 
@@ -69,9 +71,41 @@ def preprocess_word(vectors: dict, word: str):
     return next((_try_with(cand) for cand in candidates if _try_with(cand) is not None), None)
 
 
-def preprocess_words(vectors: dict, words: list[str], unrecognized_words: set[str] = None):
-    new_words = []
+def preprocess_as_word(prev_word: str, word: str):
+    should_pop = False
+
+    if word in ['A', 'B', 'C']:
+        if prev_word.lower().startswith('bulb'):
+            should_pop = True
+        return should_pop, ['bulb', word]
+
+    if word in ['X', 'Y', 'Z']:
+        if prev_word.lower().startswith('switch'):
+            should_pop = True
+        return should_pop, ['switch', word]
+
+    if word.isdigit():
+        if prev_word.lower().startswith('terminal'):
+            should_pop = True
+        return should_pop, ['terminal', word]
+
+    if word.lower().startswith('path'):
+        if prev_word.lower() not in ['closed', 'open']:
+            return should_pop, ['closed', word]
+
+
+def preprocess_words(vectors: dict, words: list[str], unrecognized_words: set[str] | None = None, *, is_as=False):
+    new_words: list[str] = []
     for word in words:
+        if is_as:
+            prev_word = new_words[-1] if len(new_words) else ''
+            result = preprocess_as_word(prev_word, word)
+            if result is not None:
+                if result[0]:
+                    new_words.pop()
+                new_words.extend(result[1])
+                continue
+
         preprocessed = preprocess_word(vectors, word)
         if preprocessed is not None:
             new_words.append(preprocessed)
@@ -79,8 +113,8 @@ def preprocess_words(vectors: dict, words: list[str], unrecognized_words: set[st
 
         # Handle case like 'non-bathingsuit'
         # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
-        corrected_word = autocorrect[word] if word in autocorrect else word
-        # corrected_word = word
+        # corrected_word = autocorrect[word] if word in autocorrect else word
+        corrected_word = word
         word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
         # print(f'{word} -> {word_parts}')
 
@@ -113,6 +147,8 @@ def get_printable_alignment(pair: SentencePair, alignment: Alignment, max_val: T
 
 
 def run(data: list[SentencePair], thr: float, *, log=False):
+    # print(f'Start for THR = {thr}')
+
     # for pair in data:
     #     ali = min(len(pair.sent_1.chunks), len(pair.sent_2.chunks))
     #     no_ali = max(len(pair.sent_1.chunks), len(pair.sent_2.chunks))
@@ -125,6 +161,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
     unrecognized_words = set()
 
     for pair in data:
+        # print(f'Start for THR = {thr}, Pair = {pair.id}')
         print_buf = []
 
         print_buf.append(f'\n\n>>> PAIR #{pair.id[2] + 1}')
@@ -134,7 +171,8 @@ def run(data: list[SentencePair], thr: float, *, log=False):
 
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
-                chunk['words'] = preprocess_words(kv, chunk['words'])
+                chunk['words'] = preprocess_words(kv, chunk['words'], is_as=pair.id[1] == Datasets.AS)
+                # pass
 
         sim_strings = []
 
@@ -149,10 +187,35 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
             for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
                 sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
+
+                if len(chunk_1['words']) and ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
+                    sim = 1
+
                 sims[i][j] = (i, j, sim)
                 sim_strings.append(
                     f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
         # ^^^ vector composition
+
+        # vvv transformsers
+        # # print(' | '.join([' '.join(data['words']) for data in pair.sent_1.chunk_data]))
+        # # print(' | '.join([' '.join(data['words']) for data in pair.sent_2.chunk_data]))
+        # similarities = chunk_cosine_sim(pair)
+        # # print(similarities)
+
+        # sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
+        #         for _ in range(len(pair.sent_1.chunks))]
+
+        # for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
+        #     for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
+        #         sim = similarities[i][j]
+
+        #         # if ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
+        #         #     sim = 1
+
+        #         sims[i][j] = (i, j, sim)
+        #         sim_strings.append(
+        #             f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
+        # ^^^ transformsers
 
         # vvv lexical semantic vectors
         # sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
@@ -211,9 +274,8 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         #     sims = delete_axis(sims, max_ij[0], 0)
         #     sims = delete_axis(sims, max_ij[1], 1)
         #
-        # should_print = True
-
-        should_print = False
+        should_print = True
+        # should_print = False
 
         while True:
             max_val = (-1, -1, -1)
@@ -324,6 +386,7 @@ def run_test(get_data: DataGetter, thr: float):
     # THR = 0.45  # lex sem vecs
     data = get_data()
     result = run(data, thr, log=False)
+    # result = run(data, thr, log=True)
     print(f'TEST THR = {thr}')
     print(f'TEST RES = {result}')
     return result
@@ -335,10 +398,16 @@ def train_and_test(get_train_data: DataGetter, get_test_data: DataGetter):
     return train_result[0], test_result
 
 
+def ddd():
+    return [SentencePair(('test', Datasets.H, 1), Sentence.from_chunks('[ I am powerful ] [ get inside ]'), Sentence.from_chunks('[ I am powerful ]  [ get inside ]'))]
+
 def main():
     random.seed(a=16032023)
 
     partial_results = []
+
+    # run_test(lambda: get_data_gs('test', Datasets.H), 0.48)
+    # run_test(ddd, 0.48)
 
     print('\nHeadlines:')
     r = train_and_test(lambda: get_data_gs('train', Datasets.H), lambda: get_data_gs('test', Datasets.H))
