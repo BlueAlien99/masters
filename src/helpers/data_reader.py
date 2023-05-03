@@ -1,3 +1,5 @@
+import re
+
 from . import paths
 from .data_types import Datasets, DataType
 from .sentence import Sentence
@@ -17,6 +19,55 @@ def _get_data(datatype: DataType, dataset: Datasets, chunked: bool):
             files_contents.append(file_content)
 
     return list(zip(*files_contents))
+
+
+def get_data_gs_with_ali(datatype: DataType, dataset: Datasets):
+    NOALI = '-not aligned-'
+
+    data = get_data_gs(datatype, dataset)
+
+    filename = f'STSint.{"test" if datatype == "test" else ""}input.{dataset}.wa'
+    filepath = f'{paths.data_path}/{filename}'
+
+    pairs: list[str] = []
+    with open(filepath, 'r') as f:
+        pairs = re.findall(re.compile(r'<alignment>(.*?)</alignment>', re.S), f.read())
+
+    alis = [[[a.strip() for a in ali.split('//')[-1].split('<==>')]
+             for ali in pair.strip().splitlines()] for pair in pairs]
+
+    skipped = set()
+
+    for pair, ali in zip(data, alis):
+        sent_1_chunks = [pair.sent_1.tokens_to_string(chunk) for chunk in pair.sent_1.chunks]
+        sent_2_chunks = [pair.sent_2.tokens_to_string(chunk) for chunk in pair.sent_2.chunks]
+
+        def decode(ali_str: str, chunks: list[str]):
+            chunks_sorted = [*chunks]
+            chunks_sorted.sort(key=len, reverse=True)
+
+            chids = []
+            while ali_str and ali_str != NOALI:
+                did_break = False
+                for c in chunks_sorted:
+                    if ali_str.startswith(c):
+                        ali_str = ali_str[len(c):].strip()
+                        chids.append(chunks.index(c))
+                        did_break = True
+                        break
+                if not did_break:
+                    skipped.add(pair.id[2] + 1)
+                    break
+            return chids
+
+        for a_1, a_2, in ali:
+            chid_ali = (decode(a_1, sent_1_chunks),
+                        decode(a_2, sent_2_chunks))
+            pair.alignments.append(chid_ali)
+
+    print(f'Skipped at least one alignment in: {skipped}')
+
+    return data
 
 
 def get_data_gs(datatype: DataType, dataset: Datasets):

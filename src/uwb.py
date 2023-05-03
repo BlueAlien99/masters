@@ -1,6 +1,6 @@
 import concurrent.futures
 from helpers.data_exporter import export_and_eval
-from helpers.data_reader import get_train_data_gs, get_test_data_gs
+from helpers.data_reader import get_train_data_gs, get_test_data_gs, get_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair, Alignment
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
@@ -9,13 +9,16 @@ from operator import add
 import re
 from gensim.models import Word2Vec
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Callable
 from nltk.stem import WordNetLemmatizer
 import nltk
 import random
 from models.keyed_vectors import load_keyed_vectors
 from models.tfidf import load_tfidf_model
 import matplotlib.pyplot as plt
+from statistics import fmean
+
+DataGetter = Callable[[], list[SentencePair]]
 
 lemmatizer = WordNetLemmatizer()
 lemmastory = set()
@@ -117,7 +120,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
     #     pair.alignments = [*[([i], [i]) for i in range(ali)],
     #                        *[(([i], []) if first_longer else ([], [i])) for i in range(ali, no_ali)]]
     #
-    # export_and_eval(data)
+    # export_and_eval(data, log=log)
 
     unrecognized_words = set()
 
@@ -229,6 +232,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
                     chids_2_used.extend([chid for chid in ali[1] if chid != max_val[1]])
 
             sims[max_val[0]][max_val[1]] = (max_val[0], max_val[1], -1)
+            # you sure? shouldn't this be inside if below?
             sent_1_chids.discard(max_val[0])
             sent_2_chids.discard(max_val[1])
 
@@ -237,6 +241,8 @@ def run(data: list[SentencePair], thr: float, *, log=False):
                 pair.alignments.append(alignment)
                 print_buf.append(get_printable_alignment(pair, alignment, max_val))
             elif len(chids_1_used) and len(chids_2_used):
+                continue
+            elif len(chids_1_used) > 1 or len(chids_2_used) > 1:
                 continue
             else:
                 idx = 0 if len(chids_1_used) else 1
@@ -273,17 +279,18 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         if should_print and log:
             print('\n'.join([(el if type(el) is str else el.__str__()) for el in print_buf]))
 
-    result = export_and_eval(data)
+    result = export_and_eval(data, log=log)
 
-    print(unrecognized_words)
-    print(f'Unrecognized words: {len(unrecognized_words)}')
+    if log:
+        print(unrecognized_words)
+        print(f'Unrecognized words: {len(unrecognized_words)}')
 
-    # print(lemmastory)
+        # print(lemmastory)
 
     return result
 
 
-def run_train(thr_step=0.01):
+def run_train(get_data: DataGetter, thr_step=0.01):
     results = []
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=9) as executor:
@@ -291,7 +298,7 @@ def run_train(thr_step=0.01):
 
         thr = 0
         while thr <= 1:
-            data = get_train_data_gs()
+            data = get_data()
             r = executor.submit(run, data, thr)
             runs[r] = thr
             thr += thr_step
@@ -302,29 +309,53 @@ def run_train(thr_step=0.01):
             results.append((thr, result))
 
     results.sort(key=lambda r: r[0])
-    print(results)
+    # print(results)
     plt.plot([d[0] for d in results], [d[1] for d in results])
     plt.axis([0, 1, 0, 1])
     plt.grid()
-    plt.show()
+    # plt.show()
     result = max(results, key=lambda r: r[1])
     return result
 
 
-def run_test(thr: float):
+def run_test(get_data: DataGetter, thr: float):
     # THR = 0.36  # vec comp
     # THR = 0.20  # idf
     # THR = 0.45  # lex sem vecs
-    data = get_test_data_gs()
-    result = run(data, thr, log=True)
+    data = get_data()
+    result = run(data, thr, log=False)
     print(f'TEST THR = {thr}')
+    print(f'TEST RES = {result}')
     return result
+
+
+def train_and_test(get_train_data: DataGetter, get_test_data: DataGetter):
+    train_result = run_train(get_train_data)
+    test_result = run_test(get_test_data, train_result[0])
+    return train_result[0], test_result
 
 
 def main():
     random.seed(a=16032023)
-    result = run_train()
-    run_test(result[0])
+
+    partial_results = []
+
+    print('\nHeadlines:')
+    r = train_and_test(lambda: get_data_gs('train', Datasets.H), lambda: get_data_gs('test', Datasets.H))
+    partial_results.append(r[1])
+
+    print('\nImages:')
+    r = train_and_test(lambda: get_data_gs('train', Datasets.I), lambda: get_data_gs('test', Datasets.I))
+    partial_results.append(r[1])
+
+    print('\nAnswers-Students:')
+    r = train_and_test(lambda: get_data_gs('train', Datasets.AS), lambda: get_data_gs('test', Datasets.AS))
+    partial_results.append(r[1])
+
+    print(f'\nAvg: {fmean(partial_results)}')
+
+    print('\nAll:')
+    train_and_test(get_train_data_gs, get_test_data_gs)
 
 
 if __name__ == '__main__':

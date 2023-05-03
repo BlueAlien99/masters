@@ -25,7 +25,14 @@ class Sentence:
         tokens = [token for token in re.split('[ \\[\\]]+', chunks_str) if token]
         sentence = ' '.join(tokens)
         chunks = [chunk.strip() for chunk in re.findall('(?<=\\[)[^\\[\\]]+', chunks_str)]
-        chunks_id = [[tokens.index(token) for token in chunk.split()] for chunk in chunks]
+
+        current_token = 0
+        chunks_id: list[list[int]] = []
+        for chunk in chunks:
+            chunk_len = len(chunk.split())
+            chunks_id.append([i for i in range(current_token, current_token + chunk_len)])
+            current_token += chunk_len
+
         return Sentence(sentence, tokens, chunks_id)
 
     def to_wa_token_mappings(self):

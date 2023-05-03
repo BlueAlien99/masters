@@ -37,19 +37,20 @@ def export_data_to_wa_files(data: list[SentencePair]):
     return export_paths
 
 
-def perl_eval(input_path: str, export_path: str, label=''):
+def perl_eval(input_path: str, export_path: str, label='', *, log=False):
     cmd = f'perl {paths.eval_script} {input_path} {export_path}'
     output = check_output(cmd.split()).decode()
     scores = [float(re.search('\\d\\.\\d+', line).group()) for line in output.splitlines()]
 
-    print(f'{label}')
-    print(export_path.split('/')[-1])
-    print(output.splitlines()[0])
+    if log:
+        print(f'{label}')
+        print(export_path.split('/')[-1])
+        print(output.splitlines()[0])
 
     return scores
 
 
-def export_and_eval(data: list[SentencePair], label=''):
+def export_and_eval(data: list[SentencePair], label='', *, log=False):
     export_paths = export_data_to_wa_files(data)
     ali_scores = []
 
@@ -59,7 +60,7 @@ def export_and_eval(data: list[SentencePair], label=''):
         for path in export_paths:
             filename = path.split('/')[-1]
             input_path = f'{paths.data_path}/{filename.split("-", 1)[-1].replace("output", "input")}'
-            perl = executor.submit(perl_eval, input_path, path, label)
+            perl = executor.submit(perl_eval, input_path, path, label, log=log)
             perls.append(perl)
 
         for future in concurrent.futures.as_completed(perls):
@@ -67,5 +68,6 @@ def export_and_eval(data: list[SentencePair], label=''):
             ali_scores.append(scores[0])
 
     avg_ali_score = round(fmean(ali_scores), 4)
-    print(f'\n F1 Ali Avg {avg_ali_score}\n\n')
+    if log:
+        print(f'\n F1 Ali Avg {avg_ali_score}\n\n')
     return avg_ali_score
