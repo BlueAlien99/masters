@@ -106,24 +106,26 @@ def preprocess_words(vectors: dict, words: list[str], unrecognized_words: set[st
                 new_words.extend(result[1])
                 continue
 
-        preprocessed = preprocess_word(vectors, word)
-        if preprocessed is not None:
-            new_words.append(preprocessed)
-            continue
+        new_words.append(word)
 
-        # Handle case like 'non-bathingsuit'
-        # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
-        # corrected_word = autocorrect[word] if word in autocorrect else word
-        corrected_word = word
-        word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
-        # print(f'{word} -> {word_parts}')
+        # preprocessed = preprocess_word(vectors, word)
+        # if preprocessed is not None:
+        #     new_words.append(preprocessed)
+        #     continue
 
-        for word_part in word_parts:
-            preprocessed = preprocess_word(vectors, word_part)
-            if preprocessed is not None:
-                new_words.append(preprocessed)
-            elif word_part not in ignore_list and unrecognized_words is not None:
-                unrecognized_words.add(word_part)
+        # # Handle case like 'non-bathingsuit'
+        # # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
+        # # corrected_word = autocorrect[word] if word in autocorrect else word
+        # corrected_word = word
+        # word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
+        # # print(f'{word} -> {word_parts}')
+
+        # for word_part in word_parts:
+        #     preprocessed = preprocess_word(vectors, word_part)
+        #     if preprocessed is not None:
+        #         new_words.append(preprocessed)
+        #     elif word_part not in ignore_list and unrecognized_words is not None:
+        #         unrecognized_words.add(word_part)
 
     return new_words
 
@@ -172,7 +174,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
                 chunk['words'] = preprocess_words(kv, chunk['words'], is_as=pair.id[1] == Datasets.AS)
-                # pass
+                pass
 
         sim_strings = []
 
@@ -181,40 +183,57 @@ def run(data: list[SentencePair], thr: float, *, log=False):
             for chunk in sent.chunk_data:
                 chunk['vec'] = get_chunk_vector(kv, chunk['words'])
 
-        sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
-                for _ in range(len(pair.sent_1.chunks))]
-
-        for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
-            for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
-                sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
-
-                if len(chunk_1['words']) and ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
-                    sim = 1
-
-                sims[i][j] = (i, j, sim)
-                sim_strings.append(
-                    f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
-        # ^^^ vector composition
-
-        # vvv transformsers
-        # # print(' | '.join([' '.join(data['words']) for data in pair.sent_1.chunk_data]))
-        # # print(' | '.join([' '.join(data['words']) for data in pair.sent_2.chunk_data]))
-        # similarities = chunk_cosine_sim(pair)
-        # # print(similarities)
-
         # sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
         #         for _ in range(len(pair.sent_1.chunks))]
 
         # for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
         #     for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
-        #         sim = similarities[i][j]
+        #         sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
 
-        #         # if ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
-        #         #     sim = 1
+        #         if len(chunk_1['words']) and ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
+        #             sim = 1
 
         #         sims[i][j] = (i, j, sim)
         #         sim_strings.append(
         #             f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
+        # ^^^ vector composition
+
+        # vvv transformsers
+        # print(' | '.join([' '.join(data['words']) for data in pair.sent_1.chunk_data]))
+        # print(' | '.join([' '.join(data['words']) for data in pair.sent_2.chunk_data]))
+        similarities = chunk_cosine_sim(pair)
+        # print(similarities)
+        # print(pair.sent_1.chunk_data)
+        # print(pair.sent_2.chunk_data)
+
+        sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
+                for _ in range(len(pair.sent_1.chunks))]
+
+        skip = [0, 0]
+        for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
+            if len(chunk_1['words']) == 0:
+                skip[0] += 1
+                continue
+
+            skip[1] = 0
+            for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
+                if len(chunk_2['words']) == 0:
+                    skip[1] += 1
+                    continue
+
+                w2v_sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
+                tra_sim = similarities[i - skip[0]][j - skip[1]].item()
+
+                # sim = tra_sim
+                # sim = (tra_sim + w2v_sim) / 2
+                sim = max(tra_sim, w2v_sim)
+
+                # if ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
+                #     sim = 1
+
+                sims[i][j] = (i, j, sim)
+                sim_strings.append(
+                    f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
         # ^^^ transformsers
 
         # vvv lexical semantic vectors
@@ -329,6 +348,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
                 alignment[idx].append(max_val[idx])
                 alignment[idx].sort()
                 print_buf.append(get_printable_alignment(pair, alignment, new_max_val))
+                pass
 
         # fun fact vvv doesn't matter
         for chid in sent_1_chids:
@@ -401,30 +421,37 @@ def train_and_test(get_train_data: DataGetter, get_test_data: DataGetter):
 def ddd():
     return [SentencePair(('test', Datasets.H, 1), Sentence.from_chunks('[ I am powerful ] [ get inside ]'), Sentence.from_chunks('[ I am powerful ]  [ get inside ]'))]
 
+
 def main():
     random.seed(a=16032023)
 
     partial_results = []
 
-    # run_test(lambda: get_data_gs('test', Datasets.H), 0.48)
+    # thr = 0.48
+    thr = 0.52
+    # thr = 0.53
+    # thr = 0.47
+    run_test(lambda: get_data_gs('test', Datasets.H), thr)
+    run_test(lambda: get_data_gs('test', Datasets.I), thr)
+    run_test(lambda: get_data_gs('test', Datasets.AS), thr)
     # run_test(ddd, 0.48)
 
-    print('\nHeadlines:')
-    r = train_and_test(lambda: get_data_gs('train', Datasets.H), lambda: get_data_gs('test', Datasets.H))
-    partial_results.append(r[1])
+    # print('\nHeadlines:')
+    # r = train_and_test(lambda: get_data_gs('train', Datasets.H), lambda: get_data_gs('test', Datasets.H))
+    # partial_results.append(r[1])
 
-    print('\nImages:')
-    r = train_and_test(lambda: get_data_gs('train', Datasets.I), lambda: get_data_gs('test', Datasets.I))
-    partial_results.append(r[1])
+    # print('\nImages:')
+    # r = train_and_test(lambda: get_data_gs('train', Datasets.I), lambda: get_data_gs('test', Datasets.I))
+    # partial_results.append(r[1])
 
-    print('\nAnswers-Students:')
-    r = train_and_test(lambda: get_data_gs('train', Datasets.AS), lambda: get_data_gs('test', Datasets.AS))
-    partial_results.append(r[1])
+    # print('\nAnswers-Students:')
+    # r = train_and_test(lambda: get_data_gs('train', Datasets.AS), lambda: get_data_gs('test', Datasets.AS))
+    # partial_results.append(r[1])
 
-    print(f'\nAvg: {fmean(partial_results)}')
+    # print(f'\nAvg: {fmean(partial_results)}')
 
-    print('\nAll:')
-    train_and_test(get_train_data_gs, get_test_data_gs)
+    # print('\nAll:')
+    # train_and_test(get_train_data_gs, get_test_data_gs)
 
 
 if __name__ == '__main__':

@@ -10,6 +10,10 @@ logging.set_verbosity_error()
 
 bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
 bert_model = AutoModel.from_pretrained("bert-base-uncased")
+# bert_tokenizer = AutoTokenizer.from_pretrained("xlnet-base-cased")
+# bert_model = AutoModel.from_pretrained("xlnet-base-cased")
+# bert_tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+# bert_model = AutoModel.from_pretrained("roberta-base")
 bert_model.eval()
 
 
@@ -36,6 +40,8 @@ def get_bert_sentence_embedding(sentence: str):
 
     with torch.no_grad():
         output = bert_model(tokens_tensor, segments_tensors)
+        # tok = bert_tokenizer(marked_text, return_tensors="pt")
+        # output = bert_model(**tok)
         encoded_layers = getattr(output, 'last_hidden_state')
 
         batch_i = 0
@@ -79,10 +85,20 @@ def get_bert_sentence_embedding(sentence: str):
 
 
 def get_bert_chunks_embedding(tokenized_text: list[str], sentence_embedding: list[torch.Tensor], sent: Sentence):
+    current_token = 0
+    chunk_tokens: list[list[int]] = []
+    for data in sent.chunk_data:
+        chunk_len = len(data['words'])
+        chunk_tokens.append([i for i in range(current_token, current_token + chunk_len)])
+        current_token += chunk_len
+
     emb_vector_list = []
-    for tokens in sent.chunks:
+    for i, tokens in enumerate(chunk_tokens):
+        if len(tokens) == 0:
+            continue
+
         start_index, end_index = tokens[0], tokens[-1]
-        start_token, end_token = sent.tokens[start_index], sent.tokens[end_index]
+        start_token, end_token = sent.chunk_data[i]['words'][0], sent.chunk_data[i]['words'][-1]
         start_bert_token, end_bert_token = tokenized_text[start_index+1], tokenized_text[end_index+1]
         if start_token != start_bert_token or end_token != end_bert_token:
             print("Something is wrong somewhere!", tokenized_text, sent.string, tokens)
@@ -96,8 +112,11 @@ def get_bert_chunks_embedding(tokenized_text: list[str], sentence_embedding: lis
 
 
 def chunk_cosine_sim(pair: SentencePair):
-    tokenized_left_text, left_sentence_embedding = get_bert_sentence_embedding(pair.sent_1.string)
-    tokenized_right_text, right_sentence_embedding = get_bert_sentence_embedding(pair.sent_2.string)
+    sent_1_string = ' '.join([' '.join(data['words']) for data in pair.sent_1.chunk_data])
+    sent_2_string = ' '.join([' '.join(data['words']) for data in pair.sent_2.chunk_data])
+
+    tokenized_left_text, left_sentence_embedding = get_bert_sentence_embedding(sent_1_string)
+    tokenized_right_text, right_sentence_embedding = get_bert_sentence_embedding(sent_2_string)
 
     left_matrix = get_bert_chunks_embedding(tokenized_left_text, left_sentence_embedding, pair.sent_1)
     right_matrix = get_bert_chunks_embedding(tokenized_right_text, right_sentence_embedding, pair.sent_2)
