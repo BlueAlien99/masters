@@ -1,16 +1,16 @@
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass
 class Sentence:
     string: str
     tokens: list[str]
-    chunks: Optional[list[list[int]]]
+    chunks: list[list[int]]
     chunk_data: list[dict[str, Any]]
 
-    def __init__(self, sentence: str, tokens: list[str], chunks: Optional[list[list[int]]] = None):
+    def __init__(self, sentence: str, tokens: list[str], chunks: list[list[int]] = []):
         self.string = sentence
         self.tokens = tokens
         self.chunks = chunks
@@ -37,6 +37,9 @@ class Sentence:
 
     def to_wa_token_mappings(self):
         return [f'{i + 1} {token} : ' for (i, token) in enumerate(self.tokens)]
+
+    def to_chunks_str(self):
+        return ' '.join([f'[ {" ".join(chunk["words"])} ]' for chunk in self.chunk_data])
 
     def chunks_to_tokens(self, chunks: list[int]):
         return [token for chunk in chunks for token in self.chunks[chunk]]

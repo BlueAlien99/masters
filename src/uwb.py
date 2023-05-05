@@ -1,9 +1,10 @@
 import concurrent.futures
 from helpers.data_exporter import export_and_eval
-from helpers.data_reader import get_train_data_gs, get_test_data_gs, get_data_gs
+# from helpers.data_reader import get_train_data_gs, get_test_data_gs, get_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair, Alignment
 from helpers.sentence import Sentence
+from chunker import get_data_gs
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
 from utils.math import cosine_similarity, delete_axis
 from operator import add
@@ -18,7 +19,12 @@ from models.keyed_vectors import load_keyed_vectors
 from models.tfidf import load_tfidf_model
 import matplotlib.pyplot as plt
 from statistics import fmean
-from bert import chunk_cosine_sim
+# from bert import chunk_cosine_sim
+import torch
+
+
+def chunk_cosine_sim(_):
+    return [[torch.Tensor([0]) for _ in range(100)] for _ in range(100)]
 
 DataGetter = Callable[[], list[SentencePair]]
 
@@ -106,26 +112,28 @@ def preprocess_words(vectors: dict, words: list[str], unrecognized_words: set[st
                 new_words.extend(result[1])
                 continue
 
-        new_words.append(word)
+        # new_words.append(word)
 
-        # preprocessed = preprocess_word(vectors, word)
-        # if preprocessed is not None:
-        #     new_words.append(preprocessed)
-        #     continue
+        # TODO: ^^^ comment when bert VVV
 
-        # # Handle case like 'non-bathingsuit'
-        # # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
-        # # corrected_word = autocorrect[word] if word in autocorrect else word
-        # corrected_word = word
-        # word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
-        # # print(f'{word} -> {word_parts}')
+        preprocessed = preprocess_word(vectors, word)
+        if preprocessed is not None:
+            new_words.append(preprocessed)
+            continue
 
-        # for word_part in word_parts:
-        #     preprocessed = preprocess_word(vectors, word_part)
-        #     if preprocessed is not None:
-        #         new_words.append(preprocessed)
-        #     elif word_part not in ignore_list and unrecognized_words is not None:
-        #         unrecognized_words.add(word_part)
+        # Handle case like 'non-bathingsuit'
+        # This actually reduced score for STSint.testoutput.images.wa from 0.8766 to 0.8760
+        # corrected_word = autocorrect[word] if word in autocorrect else word
+        corrected_word = word
+        word_parts = [word_part for word_part in re.split('[^A-Za-z]', corrected_word) if word_part]
+        # print(f'{word} -> {word_parts}')
+
+        for word_part in word_parts:
+            preprocessed = preprocess_word(vectors, word_part)
+            if preprocessed is not None:
+                new_words.append(preprocessed)
+            elif word_part not in ignore_list and unrecognized_words is not None:
+                unrecognized_words.add(word_part)
 
     return new_words
 
@@ -429,6 +437,7 @@ def main():
 
     # thr = 0.48
     thr = 0.52
+    thr = 0.37
     # thr = 0.53
     # thr = 0.47
     run_test(lambda: get_data_gs('test', Datasets.H), thr)
