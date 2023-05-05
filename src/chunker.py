@@ -84,27 +84,39 @@ def chunk_sentence(sent: str) -> str:
     # OR
     # tags = pos_tag(sent.split())
 
-    print(tags)
+    # print(tags)
     chunked_sent = ''
 
     rules = [
-        NCRE.ChunkRule(r"<.>", ''),
-        NCRE.ChunkRule(r"<,>", ''),
-        NCRE.ChunkRule(r"<:>", ''),
-        NCRE.ChunkRule(r"<''>", ''),
-        NCRE.ChunkRule(r"<W.*>", '[ who ]'),
-        NCRE.ChunkRule(r"<IN><JJS>", 'at least'),
-        NCRE.ChunkRule(r"<TO>?<VB.*>+", 'verb chains'),
-        # NCRE.ChunkRule(r"<CD><NN.*>", ''),
-        NCRE.ChunkRule(r"<NNP><CD>(<,><CD>)?", 'July 26, 2023'),
-        NCRE.ChunkRule(r"(<POS>|<RP>)?(<CD>|<IN>|<TO>|<RB>|<DT>|<JJ.*>)*<NN.*>+", ''),
+        # NCRE.ChunkRule(r"<.>", ''),
+        # NCRE.ChunkRule(r"<,>", ''),
+        # NCRE.ChunkRule(r"<:>", ''),
+        # NCRE.ChunkRule(r"<''>", ''),
+        # NCRE.ChunkRule(r"<W.*>", '[ who ]'),
+        # NCRE.ChunkRule(r"<IN><JJS>", 'at least'),
+        # NCRE.ChunkRule(r"<TO>?<VB.*>+", 'verb chains'),
+        # # NCRE.ChunkRule(r"<CD><NN.*>", ''),
+        # NCRE.ChunkRule(r"<NNP><CD>(<,><CD>)?", 'July 26, 2023'),
+        # NCRE.ChunkRule(r"(<POS>|<RP>)?(<CD>|<IN>|<TO>|<RB>|<DT>|<JJ.*>)*(<JJ.*>|<NN.*>)+", ''),
+        # NCRE.ChunkRule(r"<.*>+", 'Create missing chunks'),
+        # NCRE.SplitRule(r"<.*>", r"<IN>", ''),
+        # NCRE.SplitRule(r"<CD>", r"<CD>", ''),
+        # NCRE.MergeRule(r"<CC>", r"(<DT>|<JJ.*>|<NN.*>)", ''),
+        # NCRE.MergeRule(r"<NN.*>", r"<CC>", ''),
+        # NCRE.MergeRule(r"<POS>", r"<CC>", ''),
+        # NCRE.MergeRule(r"<PRP\$>", r"<NN.*>", '(in) its mouth'),
+        # NCRE.MergeRule(r"<PRP\$>", r"<NN.*>", ''),
+        # NCRE.MergeRule(r"<IN>", r"<.*>", 'merge single prepositions'),
+
+        NCRE.ChunkRule(r"<.>", 'periods'),
+        NCRE.ChunkRule(r"<WP>", 'who, what, how, etc.'),
+        NCRE.ChunkRule(r"<EX>", 'there'),
+        NCRE.ChunkRule(r"<TO>?(<RB>|<MD>|<VB.*>)*<VB.*>(<RB>|<RP>)?", 'verb chain (incl. not)'),
+        NCRE.ChunkRule(r"<POS>?(<TO>|<IN>)?((<DT>|<PRP\$>)?<CD>?<RB>?<JJ.*>*<NN.*>*|<CC>)*<NN.*><CD>?", 'NP / PP'),
+
         NCRE.ChunkRule(r"<.*>+", 'Create missing chunks'),
-        NCRE.SplitRule(r"<.*>", r"<IN><.*>*", ''),
-        NCRE.SplitRule(r"<CD>", r"<CD>", ''),
-        NCRE.MergeRule(r"<CC>", r"(<DT>|<JJ.*>|<NN.*>)", ''),
-        NCRE.MergeRule(r"<NN.*>", r"<CC>", ''),
-        NCRE.MergeRule(r"<POS>", r"<CC>", ''),
-        NCRE.MergeRule(r"<PRP\$>", r"<NN.*>", 'in its mouth'),
+
+        NCRE.MergeRule(r"<CD>", r"<CD>?<CC><CD>", '(terminals) 1 + (2) and 3'),
     ]
 
     chunk_parser = NCRE.RegexpChunkParser(rules, chunk_label='NP')
@@ -122,9 +134,14 @@ def chunk_sentence(sent: str) -> str:
 
 
 def main():
-    export_chunks_diff(_get_data_gs('test', Datasets.H), get_data_gs('test', Datasets.H))
+    # export_chunks_diff(_get_data_gs('test', Datasets.H), get_data_gs('test', Datasets.H))
     # export_chunks_diff(_get_data_gs('test', Datasets.I), get_data_gs('test', Datasets.I))
     # export_chunks_diff(_get_data_gs('test', Datasets.AS), get_data_gs('test', Datasets.AS))
+
+    all_gs = [*_get_data_gs('test', Datasets.H), *_get_data_gs('test', Datasets.I), *_get_data_gs('test', Datasets.AS)]
+    all_ch = [*get_data_gs('test', Datasets.H), *get_data_gs('test', Datasets.I), *get_data_gs('test', Datasets.AS)]
+
+    export_chunks_diff(all_gs, all_ch)
 
 
 if __name__ == '__main__':

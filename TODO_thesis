@@ -53,6 +53,26 @@ more granulity not a problem if multi alis handled correctly
 
 spacy does tokenisation itself which is different
 
+[ A dog ] [ in in a car ] [ . ]
+[ is riding a red sledge ]
+
+[ takes a picture ]
+[ jumping ] [ into a pool ]
+[ shakes ] [ off water ]
+
+[ " ] [ march of anger ] [ " ]
+[ ' Fast &amp ; Furious ' star Paul Walker ]
+
+comma as a separate chunk
+
+
+[ play rugby ]
+[ is playing along ]
+[ are playing ] [ together ]
+
+[ are playing on ] [ a big drum ]
+[ is rock climbing ] [ on a natural rock ]
+[ talking ] [ on a cell phone ]
 
 
 
