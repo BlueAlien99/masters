@@ -16,6 +16,10 @@ import spacy
 sp = spacy.load('en_core_web_trf')
 # sp = spacy.load('en_core_web_sm')
 
+POS_MAP = {
+    'closed': 'JJ'
+}
+
 
 def export_chunks_diff(gs_data: list[SentencePair], chunker_data: list[SentencePair]):
     # timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
@@ -62,7 +66,8 @@ def chunk_sentence(sent: str) -> str:
     init_tokens = sent.split()
 
     doc = sp(sent)
-    raw_tags = [(token.text, token.tag_) for token in doc]
+    # raw_tags = [(token.text, token.tag_) for token in doc]
+    raw_tags = [(token.text, POS_MAP[token.text] if token.text in POS_MAP else token.tag_) for token in doc]
 
     tags = []
     curr_init_token = 0
