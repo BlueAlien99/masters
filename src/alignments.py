@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.colors
 
+import helpers.paths as paths
 from helpers.data_reader import get_data_gs_with_ali
 from helpers.data_types import Datasets, DataType
 from helpers.data_exporter import export_and_eval
@@ -53,7 +54,7 @@ def main():
     analyze('test', Datasets.AS)
 
     fig, ax = plt.subplots()
-    cmap = matplotlib.colors.LinearSegmentedColormap.from_list('', ['white', (0.1, 0.5, 0.9)])
+    cmap = matplotlib.colors.LinearSegmentedColormap.from_list('', ['white', (0.2, 0.6, 1.0)])
     ax.matshow(alignment_matrix, cmap=cmap, norm=matplotlib.colors.LogNorm())
 
     for i in range(MAX_SIZE):
@@ -68,8 +69,12 @@ def main():
 
     ax.set_xticklabels(labels)
     ax.set_yticklabels(labels)
+    ax.tick_params(bottom=False)
 
-    plt.show()
+    ax.set_xlabel('Number of chunks (2nd sentence) in an alignment')
+    ax.set_ylabel('Number of chunks (1st sentence) in an alignment')
+
+    plt.savefig(f'{paths.plots_path}/ali-types-nums.png')
 
 
 if __name__ == '__main__':
