@@ -1,6 +1,5 @@
 - shitty input -> test AS 287, train AS 203
 - UK Eng., etc. -> {'to', 'neighbours', 'honour', 'of', 'and', 'centre', 'Phailin', 'legalise', 'a', 'favourite', 'cancelled'}
-- no need for lowercase
 - mean vs sum doesnt matter
 - test H PAIR #361 -> (2, 5, 0.14174472) => held <=> Takes
 - lexical sem vec vs vec comp exec time
@@ -11,65 +10,19 @@
 - 
 - 0.8636 idf low thr vs 0.8783 no-idf high thr
 - 
+- sth about wordnet? (WordNetLemmatizer o)
 - 
-
-[ sends ] [ aid team ] vs [ wins Australian election ]
-
-[ China 's stocks ] vs [ China ] [ 's Peace Ark ]
-[ Ronaldo 's hat trick ] vs [ Bin Laden ] [ 's continuing sway ]
-[ Crimea 's independence ]
-[ Muslim Brotherhood 's top leader ]
-
-[ to help ] [ destroy ] vs guidelines verb chains??
-
-
-('dog', 'NN'), ('is', 'VBZ'), ('jumping', 'VBG'),
-('dog', 'NN'), ('jumping', 'NN'),
 
 
 "'" as POS or ''
-('Snowden', 'VB')
-Philippines verb
+to limit damage
 
-[ Blaze ] [ That ] vs other [ that ]
-
-capitalization of headlines
-
-[ Ban Warns Syria Strikes Could Worsen Sectarian Violence ] all NNP
-
-verb ending with s mistaken for plural noun
-
-[ At least ] [ 45 ] [ killed ] vs [ At Least ] [ 22 Dead ] vs 
-
-[ 2 ] [ killed ] vs [ 6 Killed ]
-
-more granulity not a problem if multi alis handled correctly
-
-('table', 'JJ') at a picnic table wtf?
-
-spacy does tokenisation itself which is different
 
 [ A dog ] [ in in a car ] [ . ]
 [ is riding a red sledge ]
 
-[ takes a picture ]
-[ jumping ] [ into a pool ]
-[ shakes ] [ off water ]
 
 [ " ] [ march of anger ] [ " ]
 [ ' Fast &amp ; Furious ' star Paul Walker ]
-
-comma as a separate chunk
-
-
-[ play rugby ]
-[ is playing along ]
-[ are playing ] [ together ]
-
-[ are playing on ] [ a big drum ]
-[ is rock climbing ] [ on a natural rock ]
-[ talking ] [ on a cell phone ]
-
-
 
 
