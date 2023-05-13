@@ -3,11 +3,9 @@ from helpers.data_exporter import export_and_eval
 from helpers.data_reader import get_train_data_gs, get_test_data_gs, get_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair, Alignment
-from helpers.sentence import Sentence
 # from chunker import get_data_gs
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
 from utils.math import cosine_similarity
-from operator import add
 import re
 import numpy as np
 from typing import Tuple, Callable
@@ -16,8 +14,9 @@ from models.keyed_vectors import load_keyed_vectors
 from models.tfidf import load_tfidf_model
 import matplotlib.pyplot as plt
 from statistics import fmean
-# from bert import chunk_cosine_sim
+from bert import chunk_cosine_sim
 import torch
+import time
 
 
 # def chunk_cosine_sim(_):
@@ -66,44 +65,47 @@ def preprocess_word(vectors: dict, word: str):
     return next((_try_with(cand) for cand in candidates if _try_with(cand) is not None), None)
 
 
-# def preprocess_as_word(prev_word: str, word: str):
-#     should_pop = False
+def preprocess_as_word(prev_word: str, word: str):
+    should_pop = False
 
-#     if word in ['A', 'B', 'C']:
-#         if prev_word.lower().startswith('bulb'):
-#             should_pop = True
-#         return should_pop, ['bulb', word]
+    if word in ['A', 'B', 'C']:
+        if prev_word.lower().startswith('bulb'):
+            should_pop = True
+        return should_pop, ['bulb', word]
 
-#     if word in ['X', 'Y', 'Z']:
-#         if prev_word.lower().startswith('switch'):
-#             should_pop = True
-#         return should_pop, ['switch', word]
+    if word in ['X', 'Y', 'Z']:
+        if prev_word.lower().startswith('switch'):
+            should_pop = True
+        return should_pop, ['switch', word]
 
-#     if word.isdigit():
-#         if prev_word.lower().startswith('terminal'):
-#             should_pop = True
-#         return should_pop, ['terminal', word]
+    if word.isdigit():
+        if prev_word.lower().startswith('terminal'):
+            should_pop = True
+        return should_pop, ['terminal', word]
 
-#     if word.lower().startswith('path'):
-#         if prev_word.lower() not in ['closed', 'open']:
-#             return should_pop, ['closed', word]
+    if word.lower().startswith('path'):
+        if prev_word.lower() not in ['closed', 'open']:
+            return should_pop, ['closed', word]
 
 
 def preprocess_words(vectors: dict, words: list[str], *, is_as=False):
+    if not is_as:
+        return words
+
     new_words: list[str] = []
     for word in words:
-        #     if is_as:
-        #         prev_word = new_words[-1] if len(new_words) else ''
-        #         result = preprocess_as_word(prev_word, word)
-        #         if result is not None:
-        #             if result[0]:
-        #                 new_words.pop()
-        #             new_words.extend(result[1])
-        #             continue
+        if is_as:
+            prev_word = new_words[-1] if len(new_words) else ''
+            result = preprocess_as_word(prev_word, word)
+            if result is not None:
+                if result[0]:
+                    new_words.pop()
+                new_words.extend(result[1])
+                continue
 
-        #     # new_words.append(word)
+        # new_words.append(word)
 
-        #     # TODO: ^^^ comment when bert VVV
+        # TODO: ^^^ comment when bert VVV
 
         preprocessed = preprocess_word(vectors, word)
         if preprocessed is not None:
@@ -138,6 +140,7 @@ def get_printable_alignment(pair: SentencePair, alignment: Alignment, max_val: T
 
 def run(data: list[SentencePair], thr: float, *, log=False):
     # print(f'Start for THR = {thr}')
+    start_time = time.process_time_ns()
 
     for pair in data:
         # print(f'Start for THR = {thr}, Pair = {pair.id}')
@@ -151,79 +154,69 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         for sent in [pair.sent_1, pair.sent_2]:
             for chunk in sent.chunk_data:
                 chunk['words'] = preprocess_words(kv, chunk['words'], is_as=pair.id[1] == Datasets.AS)
-                pass
 
         sim_strings = []
-
-        # vvv vector composition
-        for sent in [pair.sent_1, pair.sent_2]:
-            for chunk in sent.chunk_data:
-                chunk['vec'] = get_chunk_vector(kv, chunk['words'])
 
         sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
                 for _ in range(len(pair.sent_1.chunks))]
 
-        for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
-            for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
-                sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
+        for sent in [pair.sent_1, pair.sent_2]:
+            for chunk in sent.chunk_data:
+                chunk['vec'] = get_chunk_vector(kv, chunk['words'])
 
-                if len(chunk_1['words']) and ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
-                    sim = 1
-
-                sims[i][j] = (i, j, sim)
-                sim_strings.append(
-                    f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
-        # ^^^ vector composition
-
-        # # vvv transformsers
-        # # print(' | '.join([' '.join(data['words']) for data in pair.sent_1.chunk_data]))
-        # # print(' | '.join([' '.join(data['words']) for data in pair.sent_2.chunk_data]))
-        # # similarities = chunk_cosine_sim(pair)
-        # print(similarities)
-        # # print(pair.sent_1.chunk_data)
-        # # print(pair.sent_2.chunk_data)
-
-        # sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
-        #         for _ in range(len(pair.sent_1.chunks))]
-
-        # skip = [0, 0]
+        # vvv vector composition
         # for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
-        #     if len(chunk_1['words']) == 0:
-        #         skip[0] += 1
-        #         continue
-
-        #     skip[1] = 0
         #     for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
-        #         if len(chunk_2['words']) == 0:
-        #             skip[1] += 1
-        #             continue
+        #         sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
 
-        #         w2v_sim = cosine_similarity(chunk_1["vec"], chunk_2["vec"])
-        #         tra_sim = similarities[i - skip[0]][j - skip[1]].item()
-
-        #         # sim = tra_sim
-        #         # sim = (tra_sim + w2v_sim) / 2
-        #         sim = max(tra_sim, w2v_sim)
-
-        #         # if ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
-        #         #     sim = 1
+        #         if len(chunk_1['words']) and ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
+        #             sim = 1
 
         #         sims[i][j] = (i, j, sim)
         #         sim_strings.append(
         #             f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
-        # # ^^^ transformsers
+        # ^^^ vector composition
+
+        # vvv transformsers
+        # print(' | '.join([' '.join(data['words']) for data in pair.sent_1.chunk_data]))
+        # print(' | '.join([' '.join(data['words']) for data in pair.sent_2.chunk_data]))
+        similarities = chunk_cosine_sim(pair)
+
+        skip = [0, 0]
+        for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
+            if len(chunk_1['words']) == 0:
+                skip[0] += 1
+                continue
+
+            skip[1] = 0
+            for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
+                if len(chunk_2['words']) == 0:
+                    skip[1] += 1
+                    continue
+
+                w2v_sim = cosine_similarity(chunk_1['vec'], chunk_2['vec'])
+                tra_sim = similarities[i - skip[0]][j - skip[1]].item()
+
+                # sim = tra_sim
+                # sim = (tra_sim + w2v_sim) / 2
+                sim = max(tra_sim, w2v_sim)
+
+                # if ' '.join(chunk_1['words']).lower() == ' '.join(chunk_2['words']).lower():
+                #     sim = 1
+
+                sims[i][j] = (i, j, sim)
+                sim_strings.append(
+                    f'{"{:.2f}".format(sim)} => {" ".join(chunk_1["words"])} <=> {" ".join(chunk_2["words"])}')
+        # ^^^ transformsers
 
         # vvv lexical semantic vectors
-        # sims = [[(-1, -1, -1) for _ in range(len(pair.sent_2.chunks))]
-        #         for _ in range(len(pair.sent_1.chunks))]
-        #
         # for i, chunk_1 in enumerate(pair.sent_1.chunk_data):
         #     for j, chunk_2 in enumerate(pair.sent_2.chunk_data):
         #         words = {*chunk_1["words"], *chunk_2["words"]}
         #         word_vecs = [vec for word in words for vec in get_word_vector(kv, word)]
         #         chunk_1_word_vecs = [vec for word in chunk_1["words"] for vec in get_word_vector(kv, word)]
         #         chunk_2_word_vecs = [vec for word in chunk_2["words"] for vec in get_word_vector(kv, word)]
-        #
+
         #         chunk_1_vec = []
         #         chunk_2_vec = []
         #         for word_vec in word_vecs:
@@ -231,7 +224,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         #                                     chunk_1_word_vecs] or [0]))
         #             chunk_2_vec.append(max([cosine_similarity(word_vec, chunk_2_word_vec) for chunk_2_word_vec in
         #                                     chunk_2_word_vecs] or [0]))
-        #
+
         #         sim = cosine_similarity(chunk_1_vec, chunk_2_vec)
         #         sims[i][j] = (i, j, sim)
         #         sim_strings.append(
@@ -244,11 +237,7 @@ def run(data: list[SentencePair], thr: float, *, log=False):
         sent_1_chids = set([i for i in range(len(pair.sent_1.chunks))])
         sent_2_chids = set([i for i in range(len(pair.sent_2.chunks))])
 
-        # print_buf.append(sims[0][1][2])
-        # print_buf.append(len(sims[0][1]))
-
-        should_print = True
-        # should_print = False
+        should_print = False
 
         while True:
             max_val = (-1, -1, -1)
@@ -274,40 +263,35 @@ def run(data: list[SentencePair], thr: float, *, log=False):
                 sent_1_chids.discard(max_val[0])
                 sent_2_chids.discard(max_val[1])
                 print_buf.append(get_printable_alignment(pair, alignment, max_val))
+            elif len(chids_1_used) and len(chids_2_used):
+                continue
+            elif len(chids_1_used) > 1 or len(chids_2_used) > 1:
+                continue
+            else:
+                idx = 0 if len(chids_1_used) else 1
+                alignment = next(ali for ali in pair.alignments if
+                                 (chids_1_used[0] in ali[0] if idx == 0 else chids_2_used[0] in ali[1]))
 
-        # elif len(chids_1_used) and len(chids_2_used):
-        #     continue
-        # elif len(chids_1_used) > 1 or len(chids_2_used) > 1:
-        #     continue
-        # else:
-        #     idx = 0 if len(chids_1_used) else 1
-        #     alignment = next(ali for ali in pair.alignments if
-        #                      (chids_1_used[0] in ali[0] if idx == 0 else chids_2_used[0] in ali[1]))
+                temp_ali = [sub.copy() for sub in alignment]
+                temp_ali[idx].append(max_val[idx])
 
-        #     temp_ali = [sub.copy() for sub in alignment]
-        #     temp_ali[idx].append(max_val[idx])
+                prev_max_val = (-1, -1,
+                                cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(alignment[0])),
+                                                  get_chunk_vector(kv, pair.sent_2.chunks_to_words(alignment[1]))))
+                new_max_val = (max_val[0], max_val[1],
+                               cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(temp_ali[0])),
+                                                 get_chunk_vector(kv, pair.sent_2.chunks_to_words(temp_ali[1]))))
 
-        #     prev_max_val = (-1, -1,
-        #                     cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(alignment[0])),
-        #                                       get_chunk_vector(kv, pair.sent_2.chunks_to_words(alignment[1]))))
-        #     new_max_val = (max_val[0], max_val[1],
-        #                    cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(temp_ali[0])),
-        #                                      get_chunk_vector(kv, pair.sent_2.chunks_to_words(temp_ali[1]))))
+                if new_max_val[2] <= prev_max_val[2]:
+                    continue
 
-        #     # OFFSET
-        #     if new_max_val[2] <= prev_max_val[2]:
-        #         continue
+                should_print = True
+                alignment[idx].append(max_val[idx])
 
-        #     should_print = True
-        #     alignment[idx].append(max_val[idx])
+                [sent_1_chids, sent_2_chids][idx].discard(max_val[idx])
 
-        # todo idx one
-        #     sent_1_chids.discard(max_val[0])
-        #     sent_2_chids.discard(max_val[1])
-
-        #     alignment[idx].sort()
-        #     print_buf.append(get_printable_alignment(pair, alignment, new_max_val))
-        #     pass
+                alignment[idx].sort()
+                print_buf.append(get_printable_alignment(pair, alignment, new_max_val))
 
         # fun fact vvv doesn't matter
         for chid in sent_1_chids:
@@ -319,6 +303,11 @@ def run(data: list[SentencePair], thr: float, *, log=False):
 
         if should_print and log:
             print('\n'.join([(el if type(el) is str else el.__str__()) for el in print_buf]))
+
+    dur = time.process_time_ns() - start_time
+    dur_ms = round(dur / 1_000_000, 2)
+    dur_per_pair = round(dur_ms / len(data), 2)
+    # print(f'Aligning -> {dur_ms} ms / {len(data)} pairs = {dur_per_pair} ms / pair')
 
     return export_and_eval(data, log=log)
 
@@ -352,9 +341,6 @@ def run_train(get_data: DataGetter, thr_step=0.01):
 
 
 def run_test(get_data: DataGetter, thr: float):
-    # THR = 0.36  # vec comp
-    # THR = 0.20  # idf
-    # THR = 0.45  # lex sem vecs
     data = get_data()
     result = run(data, thr, log=False)
     # result = run(data, thr, log=True)
@@ -370,23 +356,15 @@ def train_and_test(get_train_data: DataGetter, get_test_data: DataGetter):
     return train_result[0], test_result
 
 
-# def ddd():
-#     return [SentencePair(('test', Datasets.H, 1), Sentence.from_chunks('[ I am powerful ] [ get inside ]'), Sentence.from_chunks('[ I am powerful ]  [ get inside ]'))]
-
-
 def main():
     random.seed(a=16032023)
 
     partial_results = []
 
-    # thr = 0.48
-    # thr = 0.52
-    # thr = 0.37
-    # thr = 0.53
-    # thr = 0.47
-    thr = 0.36
-    thr = 0
-    # run_test(ddd, 0.48)
+    thr = 0.56  # max
+    # thr = 0.46  # avg
+    # thr = 0.36  # vec comp
+    # thr = 0
 
     print('\nHeadlines:')
     # r = train_and_test(lambda: get_data_gs('train', Datasets.H), lambda: get_data_gs('test', Datasets.H))
@@ -405,11 +383,11 @@ def main():
 
     # print(f'\nAvg: {fmean(partial_results)}')
 
-    print('\nAll:')
-    train_and_test(get_train_data_gs, get_test_data_gs)
+    # print('\nAll:')
+    # train_and_test(get_train_data_gs, get_test_data_gs)
 
-    print(f'Number of unrecognized words: {len(unrecognized_words)}')
-    print(unrecognized_words)
+    # print(f'Number of unrecognized words: {len(unrecognized_words)}')
+    # print(unrecognized_words)
 
 
 if __name__ == '__main__':

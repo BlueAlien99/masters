@@ -1,6 +1,5 @@
 - shitty input -> test AS 287, train AS 203
 - UK Eng., etc. -> {'to', 'neighbours', 'honour', 'of', 'and', 'centre', 'Phailin', 'legalise', 'a', 'favourite', 'cancelled'}
-- mean vs sum doesnt matter
 - test H PAIR #361 -> (2, 5, 0.14174472) => held <=> Takes
 - lexical sem vec vs vec comp exec time
 - idf mem usage

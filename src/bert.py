@@ -8,17 +8,18 @@ from helpers.sentence import Sentence
 
 logging.set_verbosity_error()
 
-bert_tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-bert_model = AutoModel.from_pretrained("bert-base-uncased")
-# bert_tokenizer = AutoTokenizer.from_pretrained("xlnet-base-cased")
-# bert_model = AutoModel.from_pretrained("xlnet-base-cased")
-# bert_tokenizer = AutoTokenizer.from_pretrained("roberta-base")
-# bert_model = AutoModel.from_pretrained("roberta-base")
+model_name = "bert-base-uncased"
+# model_name = "roberta-base"
+# model_name = "xlnet-base-cased"
+
+bert_tokenizer = AutoTokenizer.from_pretrained(model_name)
+bert_model = AutoModel.from_pretrained(model_name)
 bert_model.eval()
 
 
 def get_bert_sentence_embedding(sentence: str):
     marked_text = "[CLS] " + sentence + " [SEP]"
+    # marked_text = marked_text.lower()
 
     token_sub_word_mapping = {}
     tokenized_text = []
@@ -26,7 +27,6 @@ def get_bert_sentence_embedding(sentence: str):
 
     for token in basic_tokens:
         split_tokens = []
-        # for sub_token in bert_tokenizer.wordpiece_tokenizer.tokenize(token):
         for sub_token in bert_tokenizer.tokenize(token):
             split_tokens.append(sub_token)
             tokenized_text.append(sub_token)
@@ -40,14 +40,13 @@ def get_bert_sentence_embedding(sentence: str):
 
     with torch.no_grad():
         output = bert_model(tokens_tensor, segments_tensors)
+        # vvv for xlnet
         # tok = bert_tokenizer(marked_text, return_tensors="pt")
         # output = bert_model(**tok)
         encoded_layers = getattr(output, 'last_hidden_state')
 
-        batch_i = 0
         token_embeddings = []
 
-        # For each token in the sentence...
         for token_i in range(len(tokenized_text)):
 
             # Holds 12 layers of hidden states for each token
@@ -55,10 +54,7 @@ def get_bert_sentence_embedding(sentence: str):
 
             # For each of the 12 layers...
             for layer_i in range(len(encoded_layers)):
-                # Lookup the vector for `token_i` in `layer_i`
-                # vec = encoded_layers[layer_i][batch_i][token_i]
                 vec = encoded_layers[layer_i][token_i]
-
                 hidden_layers.append(vec)
 
             token_embeddings.append(hidden_layers)
@@ -99,6 +95,7 @@ def get_bert_chunks_embedding(tokenized_text: list[str], sentence_embedding: lis
 
         start_index, end_index = tokens[0], tokens[-1]
         start_token, end_token = sent.chunk_data[i]['words'][0], sent.chunk_data[i]['words'][-1]
+        # start_token, end_token = sent.chunk_data[i]['words'][0].lower(), sent.chunk_data[i]['words'][-1].lower()
         start_bert_token, end_bert_token = tokenized_text[start_index+1], tokenized_text[end_index+1]
         if start_token != start_bert_token or end_token != end_bert_token:
             print("Something is wrong somewhere!", tokenized_text, sent.string, tokens)
