@@ -105,7 +105,7 @@ def preprocess_words(vectors: dict, words: list[str], *, is_as=False):
 
         # new_words.append(word)
 
-        # TODO: ^^^ comment when bert VVV
+        # ^^^ comment when bert VVV
 
         preprocessed = preprocess_word(vectors, word)
         if preprocessed is not None:
