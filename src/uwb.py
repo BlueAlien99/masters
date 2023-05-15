@@ -3,6 +3,7 @@ from helpers.data_exporter import export_and_eval
 from helpers.data_reader import get_train_data_gs, get_test_data_gs, get_data_gs
 from helpers.data_types import Datasets
 from helpers.sentence_pair import SentencePair, Alignment
+import helpers.paths as paths
 # from chunker import get_data_gs
 from utils.dictionaries import ignore_list, uk_to_us, autocorrect
 from utils.math import cosine_similarity
@@ -335,6 +336,9 @@ def run_train(get_data: DataGetter, thr_step=0.01):
     plt.plot([d[0] for d in results], [d[1] for d in results])
     plt.axis([0, 1, 0, 1])
     plt.grid()
+    plt.xlabel('Threshold')
+    plt.ylabel('Mean F1 score on train datasets')
+    plt.savefig(f'{paths.plots_path}/thrs.png')
     # plt.show()
     result = max(results, key=lambda r: r[1])
     return result
