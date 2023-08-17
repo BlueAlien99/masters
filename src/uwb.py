@@ -269,30 +269,73 @@ def run(data: list[SentencePair], thr: float, *, log=False):
             elif len(chids_1_used) > 1 or len(chids_2_used) > 1:
                 continue
             else:
-                idx = 0 if len(chids_1_used) else 1
-                alignment = next(ali for ali in pair.alignments if
-                                 (chids_1_used[0] in ali[0] if idx == 0 else chids_2_used[0] in ali[1]))
+                alignments = [ali for ali in pair.alignments if (max_val[0] in ali[0] or max_val[1] in ali[1])]
+                if len(alignments) > 2:
+                    raise Exception('Too many alignments')
 
-                temp_ali = [sub.copy() for sub in alignment]
-                temp_ali[idx].append(max_val[idx])
+                # Only one alignment exists -> will be modified
+                if len(alignments) == 1:
+                    alignment = alignments[0]
 
-                prev_max_val = (-1, -1,
-                                cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(alignment[0])),
-                                                  get_chunk_vector(kv, pair.sent_2.chunks_to_words(alignment[1]))))
-                new_max_val = (max_val[0], max_val[1],
-                               cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(temp_ali[0])),
-                                                 get_chunk_vector(kv, pair.sent_2.chunks_to_words(temp_ali[1]))))
+                    # Alignments already merged
+                    if max_val[0] in alignment[0] and max_val[1] in alignment[1]:
+                        continue
 
-                if new_max_val[2] <= prev_max_val[2]:
+                    idx = 0 if max_val[1] in alignment[1] else 1
+
+                    temp_ali = [sub.copy() for sub in alignment]
+                    temp_ali[idx].append(max_val[idx])
+
+                    prev_max_val = (-1, -1,
+                                    cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(alignment[0])),
+                                                      get_chunk_vector(kv, pair.sent_2.chunks_to_words(alignment[1]))))
+                    new_max_val = (max_val[0], max_val[1],
+                                   cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(temp_ali[0])),
+                                                     get_chunk_vector(kv, pair.sent_2.chunks_to_words(temp_ali[1]))))
+
+                    if new_max_val[2] <= prev_max_val[2]:
+                        continue
+
+                    should_print = True
+                    alignment[idx].append(max_val[idx])
+
+                    [sent_1_chids, sent_2_chids][idx].discard(max_val[idx])
+
+                    alignment[idx].sort()
+                    print_buf.append(get_printable_alignment(pair, alignment, new_max_val))
+
+                # Two alignments exist -> will be merged
+                else:
                     continue
+                    [a1, a2] = alignments
 
-                should_print = True
-                alignment[idx].append(max_val[idx])
+                    temp_ali = ([*a1[0], *a2[0]], [*a1[1], *a2[1]])
 
-                [sent_1_chids, sent_2_chids][idx].discard(max_val[idx])
+                    prev_max_val1 = (-1, -1,
+                                     cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(a1[0])),
+                                                       get_chunk_vector(kv, pair.sent_2.chunks_to_words(a1[1]))))
+                    prev_max_val2 = (-1, -1,
+                                     cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(a2[0])),
+                                                       get_chunk_vector(kv, pair.sent_2.chunks_to_words(a2[1]))))
+                    new_max_val = (max_val[0], max_val[1],
+                                   cosine_similarity(get_chunk_vector(kv, pair.sent_1.chunks_to_words(temp_ali[0])),
+                                                     get_chunk_vector(kv, pair.sent_2.chunks_to_words(temp_ali[1]))))
 
-                alignment[idx].sort()
-                print_buf.append(get_printable_alignment(pair, alignment, new_max_val))
+                    # if new_max_val[2] - 0.01 <= (prev_max_val1[2]+prev_max_val2[2])/2:
+                    if new_max_val[2] <= prev_max_val1[2] or new_max_val[2] <= prev_max_val2[2]:
+                        continue
+
+                    should_print = True
+
+                    temp_ali[0].sort()
+                    temp_ali[1].sort()
+
+                    pair.alignments.remove(a1)
+                    pair.alignments.remove(a2)
+                    pair.alignments.append(temp_ali)
+
+                    print_buf.append(get_printable_alignment(pair, temp_ali, new_max_val))
+
 
         # fun fact vvv doesn't matter
         for chid in sent_1_chids:
